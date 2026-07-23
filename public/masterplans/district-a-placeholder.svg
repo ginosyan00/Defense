@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1400" viewBox="0 0 2000 1400" role="img" aria-label="District A closer aerial placeholder">
+  <defs>
+    <linearGradient id="groundA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#b7bdb6"/>
+      <stop offset="100%" stop-color="#8f978e"/>
+    </linearGradient>
+    <pattern id="greenA" width="24" height="24" patternUnits="userSpaceOnUse">
+      <rect width="24" height="24" fill="#6f8b74"/>
+      <circle cx="7" cy="9" r="2" fill="#55705c"/>
+      <circle cx="16" cy="15" r="1.6" fill="#55705c"/>
+    </pattern>
+  </defs>
+  <rect width="2000" height="1400" fill="url(#groundA)"/>
+  <rect x="120" y="160" width="1760" height="1080" rx="28" fill="#7f867e"/>
+  <rect x="420" y="360" width="1160" height="680" rx="22" fill="url(#greenA)" opacity="0.9"/>
+  <path d="M100 700 H1900" stroke="#555a55" stroke-width="54" fill="none"/>
+  <path d="M100 700 H1900" stroke="#c2c4be" stroke-width="7" stroke-dasharray="24 18" fill="none"/>
+  <path d="M1000 140 V1260" stroke="#555a55" stroke-width="42" fill="none"/>
+  <g fill="#e4dfd4" stroke="#6a655c" stroke-width="3">
+    <rect x="480" y="420" width="90" height="240" transform="rotate(-6 480 420)"/>
+    <rect x="640" y="400" width="92" height="260"/>
+    <rect x="800" y="430" width="88" height="230" transform="rotate(4 800 430)"/>
+    <rect x="1120" y="410" width="94" height="250" transform="rotate(-3 1120 410)"/>
+    <rect x="1280" y="430" width="90" height="230"/>
+    <rect x="1440" y="400" width="92" height="260" transform="rotate(5 1440 400)"/>
+  </g>
+  <g fill="#5f6460">
+    <rect x="500" y="720" width="280" height="34" rx="4"/>
+    <rect x="1220" y="720" width="280" height="34" rx="4"/>
+  </g>
+  <text x="160" y="120" fill="#2b2e2a" font-family="Georgia, serif" font-size="42">District A</text>
+</svg>

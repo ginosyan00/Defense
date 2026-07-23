@@ -1,26 +1,44 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --mp-canvas: #eceae4;
+  --mp-stage: #1c1f1c;
+  --mp-panel: #f4f2ec;
+  --mp-panel-hover: #ebe7de;
+  --mp-fallback: #2a2e2a;
+  --mp-ink: #171916;
+  --mp-ink-muted: #5f645c;
+  --mp-line: #cfc9bc;
+  --mp-marker: #f3ebe0;
+  --mp-marker-ink: #1a1c19;
+  --mp-marker-border: #c4b49a;
+  --mp-marker-muted: #9a958c;
+  --mp-marker-muted-ink: #2c2d2a;
+  --mp-marker-muted-border: #7d796f;
+  --mp-focus: #8a7348;
+  --background: var(--mp-canvas);
+  --foreground: var(--mp-ink);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-sans);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }

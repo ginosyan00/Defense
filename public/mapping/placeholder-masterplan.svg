@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c5d4e0"/>
+      <stop offset="100%" stop-color="#e8eef3"/>
+    </linearGradient>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9aaa7a"/>
+      <stop offset="100%" stop-color="#6f7d55"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <rect y="620" width="1600" height="280" fill="url(#ground)"/>
+  <rect x="180" y="280" width="420" height="360" fill="#5b6b7a"/>
+  <rect x="220" y="320" width="60" height="80" fill="#d7e6f5"/>
+  <rect x="320" y="320" width="60" height="80" fill="#d7e6f5"/>
+  <rect x="420" y="320" width="60" height="80" fill="#d7e6f5"/>
+  <rect x="220" y="440" width="60" height="80" fill="#d7e6f5"/>
+  <rect x="320" y="440" width="60" height="80" fill="#d7e6f5"/>
+  <rect x="420" y="440" width="60" height="80" fill="#d7e6f5"/>
+  <rect x="700" y="220" width="520" height="420" fill="#6a5f52"/>
+  <polygon points="700,220 960,120 1220,220" fill="#4d453c"/>
+  <rect x="780" y="300" width="70" height="90" fill="#f0e6d8"/>
+  <rect x="900" y="300" width="70" height="90" fill="#f0e6d8"/>
+  <rect x="1020" y="300" width="70" height="90" fill="#f0e6d8"/>
+  <rect x="780" y="430" width="70" height="90" fill="#f0e6d8"/>
+  <rect x="900" y="430" width="70" height="90" fill="#f0e6d8"/>
+  <rect x="1020" y="430" width="70" height="90" fill="#f0e6d8"/>
+  <circle cx="1400" cy="180" r="48" fill="#f4d58d"/>
+  <text x="800" y="860" text-anchor="middle" font-family="Georgia, serif" font-size="28" fill="#2b2f33">
+    Mapping lab placeholder · 1600×900
+  </text>
+</svg>

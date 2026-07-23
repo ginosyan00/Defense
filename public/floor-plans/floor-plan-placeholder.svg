@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <rect width="1200" height="800" fill="#ece8df"/>
+  <rect x="560" y="80" width="80" height="640" fill="#d7d2c6" stroke="#9a958c" stroke-width="2"/>
+  <rect x="80" y="80" width="480" height="280" fill="#f5f1ea" stroke="#b0aaa0" stroke-width="2"/>
+  <rect x="640" y="80" width="480" height="280" fill="#f5f1ea" stroke="#b0aaa0" stroke-width="2"/>
+  <rect x="80" y="440" width="480" height="280" fill="#f5f1ea" stroke="#b0aaa0" stroke-width="2"/>
+  <rect x="640" y="440" width="480" height="280" fill="#f5f1ea" stroke="#b0aaa0" stroke-width="2"/>
+  <text x="600" y="760" text-anchor="middle" fill="#6d675c" font-family="Georgia, serif" font-size="22">Floor plan placeholder - draw apartments</text>
+</svg>

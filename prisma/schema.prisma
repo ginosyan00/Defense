@@ -1,0 +1,540 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProjectStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum DistrictStatus {
+  AVAILABLE
+  COMING_SOON
+  SOLD_OUT
+  HIDDEN
+}
+
+enum BuildingStatus {
+  PLANNING
+  UNDER_CONSTRUCTION
+  COMPLETED
+  SOLD_OUT
+  HIDDEN
+}
+
+enum ApartmentStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  HIDDEN
+}
+
+enum InteractionType {
+  MARKER
+  POLYGON
+  MARKER_AND_POLYGON
+}
+
+enum AssetType {
+  MASTERPLAN_IMAGE
+  MASTERPLAN_SVG
+  DISTRICT_IMAGE
+  DISTRICT_SVG
+  FLOOR_SVG
+  BUILDING_GLB
+  APARTMENT_PLAN
+  APARTMENT_PDF
+  GALLERY_IMAGE
+  TEXTURE
+  PREVIEW_IMAGE
+  PANORAMA_360
+}
+
+enum AssetValidationStatus {
+  PENDING
+  VALID
+  INVALID
+}
+
+enum ApartmentMediaType {
+  IMAGE
+  PLAN
+  PANORAMA_360
+  VIDEO
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum InteractiveOwnerType {
+  PROJECT
+  DISTRICT
+  BUILDING
+  FLOOR
+  APARTMENT
+}
+
+enum InteractiveAssetStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum MappingRegionType {
+  DISTRICT
+  BUILDING
+  HOUSE
+  FLOOR
+  APARTMENT
+  CUSTOM
+}
+
+enum MappingShapeType {
+  POLYGON
+  RECTANGLE
+}
+
+enum MappingDestinationType {
+  PROJECT
+  DISTRICT
+  BUILDING
+  HOUSE
+  FLOOR
+  APARTMENT
+  INTERNAL_ROUTE
+  EXTERNAL_URL
+  INFORMATION_ONLY
+  DISABLED
+}
+
+enum MappingPublishStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CLOSED
+  SPAM
+}
+
+enum PreferredContactMethod {
+  PHONE
+  EMAIL
+  WHATSAPP
+  TELEGRAM
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  EXPIRED
+  CANCELLED
+}
+
+enum SpatialVariant {
+  DESKTOP
+  MOBILE
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         AdminRole @default(EDITOR)
+  assets       Asset[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Project {
+  id                   String            @id @default(cuid())
+  name                 String
+  slug                 String            @unique
+  description          String
+  status               ProjectStatus     @default(DRAFT)
+  location             String
+  latitude             Float?
+  longitude            Float?
+  masterplanSvgUrl     String?
+  masterplanPreviewUrl String?
+  publishedAt          DateTime?
+  districts            District[]
+  amenities            ProjectAmenity[]
+  assets               Asset[]
+  masterplanAssets     MasterplanAsset[]
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+}
+
+/// Raster aerial masterplan (or district plan) with zoom contract.
+model MasterplanAsset {
+  id             String         @id @default(cuid())
+  projectId      String?
+  project        Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  districtId     String?
+  district       District?      @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  variant        SpatialVariant @default(DESKTOP)
+  imageUrl       String
+  mobileImageUrl String?
+  width          Int
+  height         Int
+  viewBox        String
+  initialZoom    Float          @default(1)
+  minZoom        Float          @default(1)
+  maxZoom        Float          @default(4)
+  sortOrder      Int            @default(0)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([projectId, variant])
+  @@index([districtId, variant])
+}
+
+model District {
+  id                   String             @id @default(cuid())
+  projectId            String
+  project              Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name                 String
+  slug                 String
+  description          String
+  svgElementId         String
+  /// Normalized 0–1 X relative to masterplan content box
+  markerX              Float?
+  /// Normalized 0–1 Y relative to masterplan content box
+  markerY              Float?
+  markerLabel          String?
+  /// SVG path `d` in masterplan viewBox space
+  svgPath              String?
+  interactionType      InteractionType    @default(MARKER_AND_POLYGON)
+  sortOrder            Int                @default(0)
+  status               DistrictStatus     @default(AVAILABLE)
+  planSvgUrl           String?
+  planPreviewUrl       String?
+  completionDate       DateTime?
+  buildings            Building[]
+  masterplanAssets     MasterplanAsset[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@unique([projectId, slug])
+  @@index([projectId, sortOrder])
+}
+
+model Building {
+  id              String          @id @default(cuid())
+  districtId      String
+  district        District        @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  name            String
+  slug            String
+  buildingNumber  String
+  description     String
+  svgElementId    String
+  markerX         Float?
+  markerY         Float?
+  markerLabel     String?
+  svgPath         String?
+  interactionType InteractionType @default(MARKER_AND_POLYGON)
+  model3dUrl      String?
+  previewImageUrl String?
+  /// Intrinsic pixel size of previewImageUrl (for floor polygon mapping)
+  previewImageWidth  Int?
+  previewImageHeight Int?
+  completionDate  DateTime?
+  status          BuildingStatus  @default(UNDER_CONSTRUCTION)
+  sortOrder       Int             @default(0)
+  entrances       Entrance[]
+  floors          Floor[]
+  amenities       BuildingAmenity[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([districtId, slug])
+  @@index([districtId, sortOrder])
+}
+
+model Entrance {
+  id         String   @id @default(cuid())
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  name       String
+  number     Int
+  sortOrder  Int      @default(0)
+  floors     Floor[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([buildingId, number])
+}
+
+model Floor {
+  id                  String          @id @default(cuid())
+  buildingId          String
+  building            Building        @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  entranceId          String?
+  entrance            Entrance?       @relation(fields: [entranceId], references: [id], onDelete: SetNull)
+  floorNumber         Int
+  name                String
+  /// Legacy GLB mesh/group name (optional when using image mapping)
+  meshName            String
+  /// Normalized 0–1 marker on building render image
+  markerX             Float?
+  markerY             Float?
+  markerLabel         String?
+  /// SVG path in building render viewBox space
+  svgPath             String?
+  interactionType     InteractionType @default(MARKER_AND_POLYGON)
+  floorPlanSvgUrl     String?
+  floorPlanPreviewUrl String?
+  /// Raster floor plan intrinsic size (for apartment polygon mapping)
+  floorPlanImageWidth  Int?
+  floorPlanImageHeight Int?
+  sortOrder           Int             @default(0)
+  apartments          Apartment[]
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@unique([buildingId, floorNumber])
+  @@index([buildingId, sortOrder])
+}
+
+model Apartment {
+  id                  String           @id @default(cuid())
+  floorId             String
+  floor               Floor            @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  apartmentNumber     String
+  slug                String           @unique
+  svgElementId        String
+  /// Drawn polygon on floor plan image (viewBox pixel space)
+  svgPath             String?
+  markerX             Float?
+  markerY             Float?
+  markerLabel         String?
+  interactionType     InteractionType  @default(MARKER_AND_POLYGON)
+  rooms               Int
+  bedrooms            Int
+  bathrooms           Int
+  balconies           Int              @default(0)
+  totalArea           Float
+  livingArea          Float
+  balconyArea         Float            @default(0)
+  ceilingHeight       Float            @default(2.8)
+  orientation         String?
+  viewType            String?
+  price               Int
+  pricePerSquareMeter Int
+  currency            String           @default("AMD")
+  status              ApartmentStatus  @default(AVAILABLE)
+  planImageUrl        String?
+  pdfUrl              String?
+  description         String?
+  media               ApartmentMedia[]
+  priceHistory        ApartmentPrice[]
+  leads               Lead[]
+  reservations        Reservation[]
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@index([floorId, status])
+  @@index([rooms, status])
+  @@index([price, status])
+}
+
+model ApartmentMedia {
+  id          String             @id @default(cuid())
+  apartmentId String
+  apartment   Apartment          @relation(fields: [apartmentId], references: [id], onDelete: Cascade)
+  type        ApartmentMediaType
+  url         String
+  alt         String?
+  sortOrder   Int                @default(0)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+}
+
+model ApartmentPrice {
+  id                  String     @id @default(cuid())
+  apartmentId         String
+  apartment           Apartment  @relation(fields: [apartmentId], references: [id], onDelete: Cascade)
+  price               Int
+  pricePerSquareMeter Int
+  currency            String     @default("AMD")
+  effectiveFrom       DateTime   @default(now())
+  effectiveTo         DateTime?
+  createdAt           DateTime   @default(now())
+}
+
+model Amenity {
+  id        String            @id @default(cuid())
+  name      String
+  slug      String            @unique
+  icon      String?
+  projects  ProjectAmenity[]
+  buildings BuildingAmenity[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+}
+
+model ProjectAmenity {
+  projectId String
+  amenityId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  amenity   Amenity @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, amenityId])
+}
+
+model BuildingAmenity {
+  buildingId String
+  amenityId  String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  amenity    Amenity  @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@id([buildingId, amenityId])
+}
+
+model Asset {
+  id               String                @id @default(cuid())
+  projectId        String?
+  project          Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  type             AssetType
+  key              String
+  url              String
+  mimeType         String
+  byteSize         Int
+  checksum         String?
+  validationStatus AssetValidationStatus @default(PENDING)
+  validationReport Json?
+  uploadedById     String?
+  uploadedBy       User?                 @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  @@index([projectId, type])
+}
+
+model Lead {
+  id                     String                 @id @default(cuid())
+  apartmentId            String?
+  apartment              Apartment?             @relation(fields: [apartmentId], references: [id], onDelete: SetNull)
+  name                   String
+  phone                  String
+  email                  String?
+  preferredContactMethod PreferredContactMethod @default(PHONE)
+  message                String?
+  source                 String?
+  utmSource              String?
+  utmMedium              String?
+  utmCampaign            String?
+  utmTerm                String?
+  utmContent             String?
+  status                 LeadStatus             @default(NEW)
+  reservations           Reservation[]
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+}
+
+model Reservation {
+  id            String            @id @default(cuid())
+  apartmentId   String
+  apartment     Apartment         @relation(fields: [apartmentId], references: [id], onDelete: Cascade)
+  leadId        String?
+  lead          Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  status        ReservationStatus @default(PENDING)
+  holdExpiresAt DateTime?
+  notes         String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([apartmentId, status])
+}
+
+/// Generic interactive image (masterplan, district aerial, building render, floor plan).
+model InteractiveAsset {
+  id              String                 @id @default(cuid())
+  ownerType       InteractiveOwnerType
+  ownerId         String
+  imageUrl        String
+  mobileImageUrl  String?
+  originalWidth   Int
+  originalHeight  Int
+  mimeType        String
+  variant         SpatialVariant         @default(DESKTOP)
+  status          InteractiveAssetStatus @default(DRAFT)
+  regions         InteractiveRegion[]
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@index([ownerType, ownerId])
+  @@index([status])
+}
+
+/// Drawn clickable region with normalized geometry + destination mapping.
+model InteractiveRegion {
+  id                   String                 @id @default(cuid())
+  assetId              String
+  asset                InteractiveAsset       @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  regionType           MappingRegionType      @default(CUSTOM)
+  title                String
+  label                String?
+  shapeType            MappingShapeType       @default(POLYGON)
+  /// Versioned JSON: { version, coordinateSystem, closed, points: [{x,y}] }
+  points               Json
+  destinationType      MappingDestinationType @default(INFORMATION_ONLY)
+  destinationEntityId  String?
+  customUrl            String?
+  openInNewTab         Boolean                @default(false)
+  status               MappingPublishStatus   @default(DRAFT)
+  sortOrder            Int                    @default(0)
+  styleConfig          Json?
+  tooltipConfig        Json?
+  isPublished          Boolean                @default(false)
+  markers              InteractiveMarker[]
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  @@index([assetId, status])
+  @@index([destinationType, destinationEntityId])
+}
+
+model InteractiveMarker {
+  id          String            @id @default(cuid())
+  regionId    String
+  region      InteractiveRegion @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  x           Float
+  y           Float
+  label       String?
+  styleConfig Json?
+  isVisible   Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([regionId])
+}
+
+model MappingAuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}

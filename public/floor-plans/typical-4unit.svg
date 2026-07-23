@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800" role="img" aria-label="Typical 4-unit floor plan">
+  <rect width="1200" height="800" fill="#ece8df"/>
+  <path id="apartment-slot-1" d="M 80 80 L 560 80 L 560 360 L 80 360 Z" fill="#d6be8c" fill-opacity="0.35" stroke="#6d675c" stroke-width="2"/>
+  <path id="apartment-slot-2" d="M 640 80 L 1120 80 L 1120 360 L 640 360 Z" fill="#d6be8c" fill-opacity="0.35" stroke="#6d675c" stroke-width="2"/>
+  <path id="apartment-slot-3" d="M 80 440 L 560 440 L 560 720 L 80 720 Z" fill="#d6be8c" fill-opacity="0.35" stroke="#6d675c" stroke-width="2"/>
+  <path id="apartment-slot-4" d="M 640 440 L 1120 440 L 1120 720 L 640 720 Z" fill="#d6be8c" fill-opacity="0.35" stroke="#6d675c" stroke-width="2"/>
+  <path d="M 560 80 L 640 80 L 640 720 L 560 720 Z" fill="#d7d2c6" stroke="#9a958c" stroke-width="2"/>
+</svg>
