@@ -539,3 +539,12 @@ model MappingAuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
 }
+
+/// Uploaded image bytes (Postgres). Served at `/api/media/[id]` — survives deploys.
+model StoredMedia {
+  id        String   @id @default(cuid())
+  mimeType  String
+  byteSize  Int
+  data      Bytes
+  createdAt DateTime @default(now())
+}

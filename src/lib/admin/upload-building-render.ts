@@ -1,9 +1,8 @@
 "use server";
 
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { storeMediaFile } from "@/lib/media/store-media";
 
 const ALLOWED_MIME = new Set([
   "image/png",
@@ -12,14 +11,6 @@ const ALLOWED_MIME = new Set([
   "image/avif",
   "image/svg+xml",
 ]);
-
-const EXT_BY_MIME: Record<string, string> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/webp": "webp",
-  "image/avif": "avif",
-  "image/svg+xml": "svg",
-};
 
 const MAX_BYTES = 12 * 1024 * 1024;
 
@@ -76,16 +67,8 @@ export async function uploadBuildingRenderImage(input: {
     return { ok: false, error: "Շենքը չի գտնվել" };
   }
 
-  const ext = EXT_BY_MIME[file.type] ?? "png";
-  const dir = path.join(process.cwd(), "public", "uploads", "buildings");
-  await mkdir(dir, { recursive: true });
-
-  const filename = `${building.id}-${Date.now()}.${ext}`;
-  const absolute = path.join(dir, filename);
-  const buffer = Buffer.from(await file.arrayBuffer());
-  await writeFile(absolute, buffer);
-
-  const imageUrl = `/uploads/buildings/${filename}`;
+  const media = await storeMediaFile(file);
+  const imageUrl = media.url;
 
   await prisma.building.update({
     where: { id: building.id },

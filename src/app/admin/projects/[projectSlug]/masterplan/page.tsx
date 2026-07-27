@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { MasterplanImageUploader } from "@/components/admin/MasterplanImageUploader";
 import { MasterplanMappingEditor } from "@/components/admin/MasterplanMappingEditor";
 import { prisma } from "@/lib/db";
 
@@ -28,6 +29,7 @@ export default async function AdminMasterplanPage({ params }: PageProps) {
   if (!asset) notFound();
 
   const [viewW, viewH] = parseViewBox(asset.viewBox, asset.width, asset.height);
+  const cacheBusted = `${asset.imageUrl}${asset.imageUrl.includes("?") ? "&" : "?"}v=${asset.updatedAt.getTime()}`;
 
   return (
     <main className="space-y-6">
@@ -41,11 +43,21 @@ export default async function AdminMasterplanPage({ params }: PageProps) {
         <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl">
           Masterplan editor · {project.name}
         </h1>
+        <p className="mt-2 max-w-2xl text-sm text-[var(--mp-ink-muted)]">
+          Նախ ավելացրու masterplan նկարը, հետո տեղադրիր թաղամասերի marker /
+          polygon։
+        </p>
       </div>
+
+      <MasterplanImageUploader
+        projectId={project.id}
+        projectSlug={project.slug}
+        currentImageUrl={cacheBusted}
+      />
 
       <MasterplanMappingEditor
         projectSlug={project.slug}
-        imageUrl={asset.imageUrl}
+        imageUrl={cacheBusted}
         imageWidth={asset.width}
         imageHeight={asset.height}
         viewBoxWidth={viewW}

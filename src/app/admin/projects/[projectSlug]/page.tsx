@@ -203,7 +203,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
         <AdminPhaseCard
           step={1}
           title="Թաղամասեր"
-          hint="Նախ ստեղծիր թաղամաս, հետո masterplan-ի վրա դրիր marker/polygon։"
+          hint="Նախ upload արա masterplan նկարը, ստեղծիր թաղամաս, հետո դրիր marker/polygon։"
           state={activeStep === 1 ? "active" : phase1Done ? "done" : "locked"}
           progressLabel={`${districtsDone}/${districtsTotal || 0} mapped`}
           addHref={districtsTotal > 0 ? phase1Href : undefined}

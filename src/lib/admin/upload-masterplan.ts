@@ -14,21 +14,18 @@ const ALLOWED_MIME = new Set([
 
 const MAX_BYTES = 16 * 1024 * 1024;
 
-export type UploadFloorPlanResult =
+export type UploadMasterplanImageResult =
   | { ok: true; imageUrl: string; width: number; height: number }
   | { ok: false; error: string };
 
-export async function uploadFloorPlanImage(input: {
-  floorId: string;
+export async function uploadMasterplanImage(input: {
+  projectId: string;
   projectSlug: string;
-  districtSlug: string;
-  buildingSlug: string;
-  floorNumber: number;
   width: number;
   height: number;
-  clearApartmentPolygons: boolean;
+  clearDistrictPolygons: boolean;
   formData: FormData;
-}): Promise<UploadFloorPlanResult> {
+}): Promise<UploadMasterplanImageResult> {
   const file = input.formData.get("file");
   if (!(file instanceof File)) {
     return { ok: false, error: "Ֆայլ չի ընտրվել" };
@@ -51,49 +48,63 @@ export async function uploadFloorPlanImage(input: {
     return { ok: false, error: "Նկարի չափերը անվավեր են" };
   }
 
-  const floor = await prisma.floor.findFirst({
-    where: {
-      id: input.floorId,
-      floorNumber: input.floorNumber,
-      building: {
-        slug: input.buildingSlug,
-        district: {
-          slug: input.districtSlug,
-          project: { slug: input.projectSlug },
-        },
+  const project = await prisma.project.findFirst({
+    where: { id: input.projectId, slug: input.projectSlug },
+    include: {
+      masterplanAssets: {
+        where: { variant: "DESKTOP", districtId: null },
+        take: 1,
       },
     },
   });
 
-  if (!floor) {
-    return { ok: false, error: "Հարկը չի գտնվել" };
+  if (!project) {
+    return { ok: false, error: "Նախագիծը չի գտնվել" };
   }
 
   const media = await storeMediaFile(file);
   const imageUrl = media.url;
   const width = Math.round(input.width);
   const height = Math.round(input.height);
+  const viewBox = `0 0 ${width} ${height}`;
 
-  await prisma.floor.update({
-    where: { id: floor.id },
-    data: {
-      floorPlanPreviewUrl: imageUrl,
-      floorPlanImageWidth: width,
-      floorPlanImageHeight: height,
-    },
-  });
+  const existing = project.masterplanAssets[0];
+  if (existing) {
+    await prisma.masterplanAsset.update({
+      where: { id: existing.id },
+      data: {
+        imageUrl,
+        mobileImageUrl: imageUrl,
+        width,
+        height,
+        viewBox,
+      },
+    });
+  } else {
+    await prisma.masterplanAsset.create({
+      data: {
+        projectId: project.id,
+        variant: "DESKTOP",
+        imageUrl,
+        mobileImageUrl: imageUrl,
+        width,
+        height,
+        viewBox,
+      },
+    });
+  }
 
-  if (input.clearApartmentPolygons) {
-    await prisma.apartment.updateMany({
-      where: { floorId: floor.id },
+  if (input.clearDistrictPolygons) {
+    await prisma.district.updateMany({
+      where: { projectId: project.id },
       data: { svgPath: null },
     });
   }
 
-  const publicPath = `/projects/${input.projectSlug}/districts/${input.districtSlug}/buildings/${input.buildingSlug}/floors/${input.floorNumber}`;
-  const adminPath = `/admin/projects/${input.projectSlug}/districts/${input.districtSlug}/buildings/${input.buildingSlug}/floors/${input.floorNumber}`;
-  revalidatePath(publicPath);
-  revalidatePath(adminPath);
+  revalidatePath(`/projects/${input.projectSlug}`);
+  revalidatePath(`/admin/projects/${input.projectSlug}`);
+  revalidatePath(`/admin/projects/${input.projectSlug}/masterplan`);
+  revalidatePath("/admin");
 
   return { ok: true, imageUrl, width, height };
 }

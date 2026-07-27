@@ -1,9 +1,8 @@
 "use server";
 
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { storeMediaFile } from "@/lib/media/store-media";
 
 const ALLOWED_MIME = new Set([
   "image/png",
@@ -12,14 +11,6 @@ const ALLOWED_MIME = new Set([
   "image/avif",
   "image/svg+xml",
 ]);
-
-const EXT_BY_MIME: Record<string, string> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/webp": "webp",
-  "image/avif": "avif",
-  "image/svg+xml": "svg",
-};
 
 const MAX_BYTES = 16 * 1024 * 1024;
 
@@ -76,15 +67,8 @@ export async function uploadDistrictPlanImage(input: {
     return { ok: false, error: "Թաղամասը չի գտնվել" };
   }
 
-  const ext = EXT_BY_MIME[file.type] ?? "png";
-  const dir = path.join(process.cwd(), "public", "uploads", "districts");
-  await mkdir(dir, { recursive: true });
-  const filename = `${district.id}-${Date.now()}.${ext}`;
-  await writeFile(
-    path.join(dir, filename),
-    Buffer.from(await file.arrayBuffer()),
-  );
-  const imageUrl = `/uploads/districts/${filename}`;
+  const media = await storeMediaFile(file);
+  const imageUrl = media.url;
   const width = Math.round(input.width);
   const height = Math.round(input.height);
   const viewBox = `0 0 ${width} ${height}`;
