@@ -9,7 +9,6 @@ import {
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
-  type WheelEvent,
 } from "react";
 import { getContainedImageBounds, type Rect } from "@/lib/coordinates";
 import {
@@ -147,19 +146,6 @@ export function MasterplanViewport({
     });
   }, [onZoomControlsRef, reset, zoomBy]);
 
-  const onWheel = (event: WheelEvent<HTMLDivElement>) => {
-    if (!interactionEnabled) return;
-    event.preventDefault();
-    const el = viewportRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
-    zoomBy(factor, {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-    });
-  };
-
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!interactionEnabled) return;
     if (event.button !== 0) return;
@@ -264,7 +250,6 @@ export function MasterplanViewport({
       }
       aria-labelledby={labelId}
       tabIndex={interactionEnabled ? 0 : undefined}
-      onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
