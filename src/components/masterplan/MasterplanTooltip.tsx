@@ -8,6 +8,8 @@ type MasterplanTooltipProps = {
   anchor: { xPercent: number; yPercent: number } | null;
   visible: boolean;
   onView: (href: string) => void;
+  onTooltipEnter: () => void;
+  onTooltipLeave: () => void;
 };
 
 function formatPrice(value: number | null, currency: string): string {
@@ -35,20 +37,25 @@ export function MasterplanTooltip({
   anchor,
   visible,
   onView,
+  onTooltipEnter,
+  onTooltipLeave,
 }: MasterplanTooltipProps) {
   if (!hotspot || !anchor || !visible) return null;
 
   return (
     <div
-      className="pointer-events-none absolute z-20 hidden md:block"
+      className="absolute z-20 hidden md:block"
       style={{
         left: `${anchor.xPercent}%`,
         top: `${anchor.yPercent}%`,
-        transform: "translate(-50%, calc(-100% - 18px))",
+        // Clear the 44px marker (half above anchor) so the card never steals hover.
+        transform: "translate(-50%, calc(-100% - 40px))",
       }}
       role="tooltip"
+      onMouseEnter={onTooltipEnter}
+      onMouseLeave={onTooltipLeave}
     >
-      <div className="pointer-events-auto w-[260px] border border-[var(--mp-line)] bg-[var(--mp-panel)] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.28)]">
+      <div className="w-[260px] border border-[var(--mp-line)] bg-[var(--mp-panel)] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.28)]">
         <div className="mb-2 flex items-center justify-between gap-2">
           <p className="font-[family-name:var(--font-display)] text-lg text-[var(--mp-ink)]">
             {hotspot.title}

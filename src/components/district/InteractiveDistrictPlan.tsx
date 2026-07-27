@@ -30,7 +30,9 @@ export function InteractiveDistrictPlan({
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [tooltipPinned, setTooltipPinned] = useState(false);
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
+  const hoverClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controlsRef = useRef<ZoomControls>({
     zoomIn: () => undefined,
     zoomOut: () => undefined,
@@ -45,6 +47,12 @@ export function InteractiveDistrictPlan({
     return () => media.removeEventListener("change", update);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current);
+    };
+  }, []);
+
   const buildings = useMemo(
     () => payload.buildings.filter((b) => b.status !== "HIDDEN"),
     [payload.buildings],
@@ -52,6 +60,25 @@ export function InteractiveDistrictPlan({
 
   const activeId = hoveredId ?? selectedId ?? focusedId;
   const activeBuilding = buildings.find((b) => b.id === activeId) ?? null;
+
+  const clearHoverSoon = useCallback(() => {
+    if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current);
+    hoverClearTimer.current = setTimeout(() => {
+      if (!tooltipPinned) setHoveredId(null);
+    }, 120);
+  }, [tooltipPinned]);
+
+  const onHoverBuilding = useCallback(
+    (id: string | null) => {
+      if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current);
+      if (id) {
+        setHoveredId(id);
+        return;
+      }
+      clearHoverSoon();
+    },
+    [clearHoverSoon],
+  );
 
   const onSelect = useCallback(
     (id: string) => {
@@ -126,7 +153,7 @@ export function InteractiveDistrictPlan({
                 hoveredId={hoveredId}
                 selectedId={selectedId}
                 focusedId={focusedId}
-                onHover={setHoveredId}
+                onHover={onHoverBuilding}
                 onSelect={onSelect}
               />
               {buildings.map((building) => (
@@ -136,16 +163,33 @@ export function InteractiveDistrictPlan({
                   isHovered={building.id === hoveredId}
                   isSelected={building.id === selectedId}
                   isFocused={building.id === focusedId}
-                  onHover={setHoveredId}
+                  onHover={onHoverBuilding}
                   onSelect={onSelect}
                   onFocus={setFocusedId}
                 />
               ))}
               <BuildingTooltip
-                building={!isCoarsePointer && hoveredId ? activeBuilding : null}
+                building={
+                  !isCoarsePointer && (hoveredId || tooltipPinned)
+                    ? activeBuilding
+                    : null
+                }
                 anchor={tooltipAnchor}
-                visible={!isCoarsePointer && Boolean(hoveredId)}
+                visible={
+                  !isCoarsePointer &&
+                  Boolean(hoveredId || tooltipPinned) &&
+                  Boolean(activeBuilding)
+                }
                 onView={onView}
+                onTooltipEnter={() => {
+                  if (hoverClearTimer.current)
+                    clearTimeout(hoverClearTimer.current);
+                  setTooltipPinned(true);
+                }}
+                onTooltipLeave={() => {
+                  setTooltipPinned(false);
+                  setHoveredId(null);
+                }}
               />
             </div>
           )}

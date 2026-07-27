@@ -28,7 +28,9 @@ export function InteractiveMasterplan({ payload }: InteractiveMasterplanProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [tooltipPinned, setTooltipPinned] = useState(false);
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
+  const hoverClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controlsRef = useRef<ZoomControls>({
     zoomIn: () => undefined,
     zoomOut: () => undefined,
@@ -43,6 +45,12 @@ export function InteractiveMasterplan({ payload }: InteractiveMasterplanProps) {
     return () => media.removeEventListener("change", update);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current);
+    };
+  }, []);
+
   const visibleHotspots = useMemo(
     () => payload.hotspots.filter((h) => h.status !== "HIDDEN"),
     [payload.hotspots],
@@ -51,6 +59,25 @@ export function InteractiveMasterplan({ payload }: InteractiveMasterplanProps) {
   const activeId = hoveredId ?? selectedId ?? focusedId;
   const activeHotspot =
     visibleHotspots.find((h) => h.id === activeId) ?? null;
+
+  const clearHoverSoon = useCallback(() => {
+    if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current);
+    hoverClearTimer.current = setTimeout(() => {
+      if (!tooltipPinned) setHoveredId(null);
+    }, 120);
+  }, [tooltipPinned]);
+
+  const onHoverHotspot = useCallback(
+    (id: string | null) => {
+      if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current);
+      if (id) {
+        setHoveredId(id);
+        return;
+      }
+      clearHoverSoon();
+    },
+    [clearHoverSoon],
+  );
 
   const legendCounts = useMemo(
     () => ({
@@ -136,7 +163,7 @@ export function InteractiveMasterplan({ payload }: InteractiveMasterplanProps) {
               hoveredId={hoveredId}
               selectedId={selectedId}
               focusedId={focusedId}
-              onHover={setHoveredId}
+              onHover={onHoverHotspot}
               onSelect={onSelect}
             />
             {visibleHotspots.map((hotspot) => (
@@ -146,16 +173,32 @@ export function InteractiveMasterplan({ payload }: InteractiveMasterplanProps) {
                 isHovered={hotspot.id === hoveredId}
                 isSelected={hotspot.id === selectedId}
                 isFocused={hotspot.id === focusedId}
-                onHover={setHoveredId}
+                onHover={onHoverHotspot}
                 onSelect={onSelect}
                 onFocus={setFocusedId}
               />
             ))}
             <MasterplanTooltip
-              hotspot={!isCoarsePointer && hoveredId ? activeHotspot : null}
+              hotspot={
+                !isCoarsePointer && (hoveredId || tooltipPinned)
+                  ? activeHotspot
+                  : null
+              }
               anchor={tooltipAnchor}
-              visible={!isCoarsePointer && Boolean(hoveredId)}
+              visible={
+                !isCoarsePointer &&
+                Boolean(hoveredId || tooltipPinned) &&
+                Boolean(activeHotspot)
+              }
               onView={onView}
+              onTooltipEnter={() => {
+                if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current);
+                setTooltipPinned(true);
+              }}
+              onTooltipLeave={() => {
+                setTooltipPinned(false);
+                setHoveredId(null);
+              }}
             />
           </div>
         )}
