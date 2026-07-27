@@ -2,6 +2,7 @@
 
 import type { MasterplanHotspotContract } from "@/types/masterplan";
 import { formatMoney } from "@/lib/format-money";
+import { canNavigateSpatialStatus } from "@/lib/spatial-status";
 
 type MasterplanMobileSheetProps = {
   hotspot: MasterplanHotspotContract | null;
@@ -38,8 +39,7 @@ export function MasterplanMobileSheet({
 }: MasterplanMobileSheetProps) {
   if (!open || !hotspot) return null;
 
-  const canNavigate =
-    hotspot.status === "AVAILABLE" || hotspot.status === "SOLD_OUT";
+  const canNavigate = canNavigateSpatialStatus(hotspot.status);
 
   return (
     <div className="absolute inset-x-0 bottom-0 z-40 md:hidden">

@@ -79,6 +79,7 @@ export async function getFloorPlan(
   }));
 
   // Procedural plate only when there is no uploaded floor-plan image.
+  // Never reuse the 4-slot template — extra units stay unmapped until admin draws them.
   if (!hasRaster) {
     for (let index = 0; index < apartments.length; index += 1) {
       const apartment = apartments[index]!;

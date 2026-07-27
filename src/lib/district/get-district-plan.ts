@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { getDistrictPlaceholderAsset } from "@/lib/district/placeholder-asset";
 import type {
   BuildingHotspotContract,
   BuildingVisualStatus,
@@ -43,48 +44,22 @@ function mapInteractionType(
   return value;
 }
 
-function placeholderDistrictAsset(districtSlug: string) {
-  if (districtSlug === "district-a") {
-    return {
-      id: `placeholder-${districtSlug}`,
-      imageUrl: `/masterplans/district-a-aerial.png`,
-      mobileImageUrl: `/masterplans/district-a-aerial.png`,
-      width: 1024,
-      height: 512,
-      viewBox: "0 0 1024 512",
-      initialZoom: 1,
-      minZoom: 1,
-      maxZoom: 4,
-    };
-  }
-  const known = districtSlug === "district-b" ? districtSlug : "district-b";
-  return {
-    id: `placeholder-${districtSlug}`,
-    imageUrl: `/masterplans/${known}-placeholder.svg`,
-    mobileImageUrl: `/masterplans/${known}-placeholder.svg`,
-    width: 2000,
-    height: 1400,
-    viewBox: "0 0 2000 1400",
-    initialZoom: 1,
-    minZoom: 1,
-    maxZoom: 4,
-  };
-}
-
-/** Deterministic building layout inside district viewBox when DB coords missing. */
+/** Deterministic building layout in the asset's own pixel space. */
 function fallbackBuildingLayout(
   index: number,
   total: number,
+  width: number,
+  height: number,
 ): { markerX: number; markerY: number; svgPath: string } {
   const cols = Math.min(3, Math.max(1, total));
   const col = index % cols;
   const row = Math.floor(index / cols);
   const markerX = 0.28 + col * 0.22;
   const markerY = 0.35 + row * 0.28;
-  const cx = markerX * 2000;
-  const cy = markerY * 1400;
-  const w = 140;
-  const h = 200;
+  const cx = markerX * width;
+  const cy = markerY * height;
+  const w = width * 0.07;
+  const h = height * 0.14;
   return {
     markerX,
     markerY,
@@ -140,7 +115,7 @@ export async function getDistrictPlan(
         minZoom: assetRow.minZoom,
         maxZoom: assetRow.maxZoom,
       }
-    : placeholderDistrictAsset(district.slug);
+    : getDistrictPlaceholderAsset(district.slug);
 
   const buildings: BuildingHotspotContract[] = district.buildings.map(
     (building, index) => {
@@ -156,7 +131,12 @@ export async function getDistrictPlan(
               markerY: building.markerY,
               svgPath: building.svgPath,
             }
-          : fallbackBuildingLayout(index, district.buildings.length);
+          : fallbackBuildingLayout(
+              index,
+              district.buildings.length,
+              asset.width,
+              asset.height,
+            );
 
       return {
         id: building.id,

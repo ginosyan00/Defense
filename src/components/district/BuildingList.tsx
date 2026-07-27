@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { BuildingHotspotContract } from "@/types/district-plan";
+import { canNavigateSpatialStatus } from "@/lib/spatial-status";
 
 type BuildingListProps = {
   buildings: BuildingHotspotContract[];
@@ -43,6 +44,7 @@ export function BuildingList({
     <ul className="divide-y divide-[var(--mp-line)] border border-[var(--mp-line)]">
       {items.map((building) => {
         const isActive = building.id === activeId;
+        const canNavigate = canNavigateSpatialStatus(building.status);
         const content = (
           <span className="flex w-full items-center justify-between gap-4 px-4 py-3">
             <span className="flex items-center gap-3">
@@ -66,15 +68,25 @@ export function BuildingList({
               </span>
             </span>
             <span className="text-xs uppercase tracking-[0.14em] text-[var(--mp-ink-muted)]">
-              Դիտել
+              {canNavigate ? "Դիտել" : statusText(building.status)}
             </span>
           </span>
         );
 
-        if (building.status === "DISABLED") {
+        if (!canNavigate) {
           return (
-            <li key={building.id} className="opacity-50">
-              <div aria-disabled>{content}</div>
+            <li
+              key={building.id}
+              className={building.status === "DISABLED" ? "opacity-50" : ""}
+            >
+              <div
+                aria-disabled
+                className={isActive ? "bg-[var(--mp-panel-hover)]" : ""}
+                onMouseEnter={() => onHover?.(building.id)}
+                onMouseLeave={() => onHover?.(null)}
+              >
+                {content}
+              </div>
             </li>
           );
         }

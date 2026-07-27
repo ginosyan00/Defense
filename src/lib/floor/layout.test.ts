@@ -11,9 +11,10 @@ describe("floor plan layout", () => {
     expect(TYPICAL_4_UNIT_PATHS).toHaveLength(4);
   });
 
-  it("maps apartment slots cyclically for svgElementId binding", () => {
+  it("maps the first four apartment slots without overlap", () => {
     expect(pathForApartmentSlot(0)).toBe(TYPICAL_4_UNIT_PATHS[0]);
-    expect(pathForApartmentSlot(4)).toBe(TYPICAL_4_UNIT_PATHS[0]);
     expect(pathForApartmentSlot(1)).toContain("640 80");
+    expect(pathForApartmentSlot(3)).toBe(TYPICAL_4_UNIT_PATHS[3]);
+    expect(pathForApartmentSlot(4)).toBeNull();
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import type { SpatialHotspotBase } from "@/types/spatial";
+import { isMutedSpatialStatus } from "@/lib/spatial-status";
 
 type MasterplanSvgOverlayProps = {
   viewBox: string;
@@ -28,8 +29,8 @@ export function MasterplanSvgOverlay({
       className="pointer-events-none absolute inset-0 h-full w-full"
       viewBox={viewBox}
       preserveAspectRatio="none"
-      role="presentation"
-      aria-hidden
+      role="group"
+      aria-label="Masterplan districts"
     >
       <defs>
         <filter id="mp-glow" x="-20%" y="-20%" width="140%" height="140%">
@@ -48,6 +49,7 @@ export function MasterplanSvgOverlay({
           width="100%"
           height="100%"
           fill="rgba(12, 14, 12, 0.28)"
+          aria-hidden
         />
       ) : null}
 
@@ -64,15 +66,22 @@ export function MasterplanSvgOverlay({
           hotspot.id === hoveredId ||
           hotspot.id === selectedId ||
           hotspot.id === focusedId;
-        const muted =
-          hotspot.status === "COMING_SOON" || hotspot.status === "SOLD_OUT";
+        const muted = isMutedSpatialStatus(hotspot.status);
+        const disabled = hotspot.status === "DISABLED";
+        // Markers already cover keyboard for MARKER_AND_POLYGON.
+        const keyboardTarget =
+          hotspot.interactionType === "POLYGON" && !disabled;
 
         return (
           <path
             key={`poly-${hotspot.id}`}
             d={hotspot.svgPath}
             data-hotspot={hotspot.id}
-            className="pointer-events-auto cursor-pointer"
+            className={
+              disabled
+                ? "pointer-events-none"
+                : "pointer-events-auto cursor-pointer outline-none focus-visible:stroke-[3] focus-visible:stroke-[var(--mp-focus)]"
+            }
             fill={
               isActive
                 ? muted
@@ -89,9 +98,30 @@ export function MasterplanSvgOverlay({
             }
             strokeWidth={isActive ? 3 : 1.5}
             filter={isActive ? "url(#mp-glow)" : undefined}
-            onMouseEnter={() => onHover(hotspot.id)}
+            tabIndex={keyboardTarget ? 0 : undefined}
+            role={keyboardTarget ? "button" : undefined}
+            aria-label={keyboardTarget ? hotspot.title : undefined}
+            aria-hidden={keyboardTarget ? undefined : true}
+            onMouseEnter={() => {
+              if (!disabled) onHover(hotspot.id);
+            }}
             onMouseLeave={() => onHover(null)}
-            onClick={() => onSelect(hotspot.id)}
+            onFocus={() => {
+              if (keyboardTarget) onHover(hotspot.id);
+            }}
+            onBlur={() => {
+              if (keyboardTarget) onHover(null);
+            }}
+            onKeyDown={(event) => {
+              if (!keyboardTarget) return;
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelect(hotspot.id);
+              }
+            }}
+            onClick={() => {
+              if (!disabled) onSelect(hotspot.id);
+            }}
           />
         );
       })}

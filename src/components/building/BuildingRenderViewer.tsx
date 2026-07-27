@@ -73,7 +73,7 @@ export function BuildingRenderViewer({
                 <path
                   key={`poly-${floor.id}`}
                   d={floor.svgPath}
-                  className="cursor-pointer"
+                  className="cursor-pointer outline-none focus-visible:stroke-[var(--mp-focus)]"
                   fill={
                     isActive
                       ? "rgba(214, 190, 140, 0.42)"
@@ -85,8 +85,19 @@ export function BuildingRenderViewer({
                       : "rgba(138, 115, 72, 0.55)"
                   }
                   strokeWidth={isActive ? 3 : 1.5}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={floor.name}
                   onMouseEnter={() => setActiveId(floor.id)}
                   onMouseLeave={() => setActiveId(null)}
+                  onFocus={() => setActiveId(floor.id)}
+                  onBlur={() => setActiveId(null)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      router.push(floor.href);
+                    }
+                  }}
                   onClick={() => router.push(floor.href)}
                 />
               );

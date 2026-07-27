@@ -111,7 +111,7 @@ export default async function BuildingPage({ params }: BuildingPageProps) {
           Հարկերի ցանկ
         </h2>
         <p className="mb-4 text-sm text-[var(--mp-ink-muted)]">
-          Accessibility fallback — աշխատում է առանց WebGL։
+          Accessibility fallback — հարկերի ցանկը աշխատում է առանց 3D viewer-ի։
         </p>
         {building.floors.length === 0 ? (
           <p className="text-sm text-[var(--mp-ink-muted)]">

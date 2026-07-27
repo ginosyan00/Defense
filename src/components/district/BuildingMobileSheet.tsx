@@ -2,6 +2,7 @@
 
 import type { BuildingHotspotContract } from "@/types/district-plan";
 import { formatMoney } from "@/lib/format-money";
+import { canNavigateSpatialStatus } from "@/lib/spatial-status";
 
 type BuildingMobileSheetProps = {
   building: BuildingHotspotContract | null;
@@ -38,8 +39,7 @@ export function BuildingMobileSheet({
 }: BuildingMobileSheetProps) {
   if (!open || !building) return null;
 
-  const canNavigate =
-    building.status === "AVAILABLE" || building.status === "SOLD_OUT";
+  const canNavigate = canNavigateSpatialStatus(building.status);
 
   return (
     <div className="absolute inset-x-0 bottom-0 z-40 md:hidden">

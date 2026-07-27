@@ -86,6 +86,8 @@ export function InteractiveFloorPlan({ payload }: InteractiveFloorPlanProps) {
 
       if (apartment.status === "SOLD") {
         setSelectedId(id);
+        setHoveredId(id);
+        setTooltipPinned(true);
         return;
       }
 
@@ -144,6 +146,7 @@ export function InteractiveFloorPlan({ payload }: InteractiveFloorPlanProps) {
                 onTooltipLeave={() => {
                   setTooltipPinned(false);
                   setHoveredId(null);
+                  setSelectedId(null);
                 }}
               />
             </div>
@@ -180,7 +183,7 @@ export function InteractiveFloorPlan({ payload }: InteractiveFloorPlanProps) {
         <ApartmentList
           apartments={apartments}
           activeId={activeId}
-          onHover={setHoveredId}
+          onHover={onHoverApartment}
         />
       </div>
     </div>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { MasterplanHotspotContract } from "@/types/masterplan";
+import { canNavigateSpatialStatus } from "@/lib/spatial-status";
 
 type MasterplanDistrictListProps = {
   hotspots: MasterplanHotspotContract[];
@@ -43,6 +44,7 @@ export function MasterplanDistrictList({
     <ul className="divide-y divide-[var(--mp-line)] border border-[var(--mp-line)]">
       {items.map((hotspot) => {
         const isActive = hotspot.id === activeId;
+        const canNavigate = canNavigateSpatialStatus(hotspot.status);
         const content = (
           <span className="flex w-full items-center justify-between gap-4 px-4 py-3">
             <span className="flex items-center gap-3">
@@ -66,15 +68,25 @@ export function MasterplanDistrictList({
               </span>
             </span>
             <span className="text-xs uppercase tracking-[0.14em] text-[var(--mp-ink-muted)]">
-              Դիտել
+              {canNavigate ? "Դիտել" : statusText(hotspot.status)}
             </span>
           </span>
         );
 
-        if (hotspot.status === "DISABLED") {
+        if (!canNavigate) {
           return (
-            <li key={hotspot.id} className="opacity-50">
-              <div aria-disabled>{content}</div>
+            <li
+              key={hotspot.id}
+              className={hotspot.status === "DISABLED" ? "opacity-50" : ""}
+            >
+              <div
+                aria-disabled
+                className={isActive ? "bg-[var(--mp-panel-hover)]" : ""}
+                onMouseEnter={() => onHover?.(hotspot.id)}
+                onMouseLeave={() => onHover?.(null)}
+              >
+                {content}
+              </div>
             </li>
           );
         }

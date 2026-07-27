@@ -2,6 +2,7 @@
 
 import type { MasterplanHotspotContract } from "@/types/masterplan";
 import { formatMoney } from "@/lib/format-money";
+import { canNavigateSpatialStatus } from "@/lib/spatial-status";
 
 type MasterplanTooltipProps = {
   hotspot: MasterplanHotspotContract | null;
@@ -42,16 +43,18 @@ export function MasterplanTooltip({
 }: MasterplanTooltipProps) {
   if (!hotspot || !anchor || !visible) return null;
 
+  const canNavigate = canNavigateSpatialStatus(hotspot.status);
+
   return (
     <div
       className="absolute z-20 hidden md:block"
       style={{
         left: `${anchor.xPercent}%`,
         top: `${anchor.yPercent}%`,
-        // Clear the 44px marker (half above anchor) so the card never steals hover.
         transform: "translate(-50%, calc(-100% - 40px))",
       }}
-      role="tooltip"
+      role="dialog"
+      aria-label={hotspot.title}
       onMouseEnter={onTooltipEnter}
       onMouseLeave={onTooltipLeave}
     >
@@ -95,10 +98,13 @@ export function MasterplanTooltip({
         </dl>
         <button
           type="button"
-          className="mt-4 w-full border border-[var(--mp-ink)] bg-[var(--mp-ink)] px-3 py-2 text-xs uppercase tracking-[0.18em] text-[var(--mp-panel)] transition hover:bg-transparent hover:text-[var(--mp-ink)]"
-          onClick={() => onView(hotspot.href)}
+          className="mt-4 w-full border border-[var(--mp-ink)] bg-[var(--mp-ink)] px-3 py-2 text-xs uppercase tracking-[0.18em] text-[var(--mp-panel)] transition hover:bg-transparent hover:text-[var(--mp-ink)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-[var(--mp-ink)] disabled:hover:text-[var(--mp-panel)]"
+          disabled={!canNavigate}
+          onClick={() => {
+            if (canNavigate) onView(hotspot.href);
+          }}
         >
-          Դիտել
+          {canNavigate ? "Դիտել" : "Շուտով"}
         </button>
       </div>
     </div>

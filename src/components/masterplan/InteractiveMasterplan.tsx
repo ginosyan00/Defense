@@ -11,6 +11,7 @@ import { MasterplanSvgOverlay } from "@/components/masterplan/MasterplanSvgOverl
 import { MasterplanTooltip } from "@/components/masterplan/MasterplanTooltip";
 import { MasterplanViewport } from "@/components/masterplan/MasterplanViewport";
 import { normalizedToPercent } from "@/lib/coordinates";
+import { canNavigateSpatialStatus } from "@/lib/spatial-status";
 import type { MasterplanPayload } from "@/types/masterplan";
 
 type InteractiveMasterplanProps = {
@@ -99,11 +100,14 @@ export function InteractiveMasterplan({ payload }: InteractiveMasterplanProps) {
       if (isCoarsePointer) {
         setSelectedId(id);
         setHoveredId(null);
+        setTooltipPinned(false);
         return;
       }
 
-      if (hotspot.status === "COMING_SOON") {
+      if (!canNavigateSpatialStatus(hotspot.status)) {
         setSelectedId(id);
+        setHoveredId(id);
+        setTooltipPinned(true);
         return;
       }
 
@@ -198,6 +202,7 @@ export function InteractiveMasterplan({ payload }: InteractiveMasterplanProps) {
               onTooltipLeave={() => {
                 setTooltipPinned(false);
                 setHoveredId(null);
+                setSelectedId(null);
               }}
             />
           </div>

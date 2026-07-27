@@ -20,6 +20,11 @@ export const TYPICAL_4_UNIT_PATHS = [
 export const FLOOR_CORE_PATH =
   "M 560 80 L 640 80 L 640 720 L 560 720 Z";
 
-export function pathForApartmentSlot(index: number): string {
-  return TYPICAL_4_UNIT_PATHS[index % TYPICAL_4_UNIT_PATHS.length] ?? TYPICAL_4_UNIT_PATHS[0];
+/**
+ * Procedural path for unmapped apartments on a blank plate.
+ * Returns null when index is outside the 4-unit template so units never overlap.
+ */
+export function pathForApartmentSlot(index: number): string | null {
+  if (index < 0 || index >= TYPICAL_4_UNIT_PATHS.length) return null;
+  return TYPICAL_4_UNIT_PATHS[index] ?? null;
 }

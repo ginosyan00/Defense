@@ -28,14 +28,12 @@ function mapInteractionType(
   return value;
 }
 
-/**
- * Loads masterplan payload from Neon. Falls back to placeholder when
- * spatial asset or marker mappings are incomplete.
- */
-export async function getProjectMasterplan(
-  projectSlug: string,
-): Promise<MasterplanPayload | null> {
-  const project = await prisma.project.findUnique({
+type ProjectWithMasterplan = NonNullable<
+  Awaited<ReturnType<typeof loadProject>>
+>;
+
+async function loadProject(projectSlug: string) {
+  return prisma.project.findUnique({
     where: { slug: projectSlug },
     include: {
       masterplanAssets: {
@@ -64,34 +62,14 @@ export async function getProjectMasterplan(
       },
     },
   });
+}
 
-  if (!project) {
-    // Local QA fallback for unknown slugs during MVP.
-    if (projectSlug === "defense-residence") return null;
-    return getPlaceholderMasterplanPayload(projectSlug);
-  }
-
-  const asset = project.masterplanAssets[0];
-  const districtsWithCoords = project.districts.filter(
-    (d) => d.markerX != null && d.markerY != null,
-  );
-
-  if (!asset || districtsWithCoords.length === 0) {
-    const fallback = getPlaceholderMasterplanPayload(project.slug);
-    return {
-      ...fallback,
-      project: {
-        id: project.id,
-        slug: project.slug,
-        name: project.name,
-        description: project.description,
-        location: project.location,
-      },
-    };
-  }
-
-  const hotspots: MasterplanHotspotContract[] = districtsWithCoords.map(
-    (district) => {
+function buildHotspots(
+  project: ProjectWithMasterplan,
+): MasterplanHotspotContract[] {
+  return project.districts
+    .filter((d) => d.markerX != null && d.markerY != null)
+    .map((district) => {
       const apartments = district.buildings.flatMap((building) =>
         building.floors.flatMap((floor) => floor.apartments),
       );
@@ -103,7 +81,7 @@ export async function getProjectMasterplan(
 
       return {
         id: district.id,
-        entityType: "district",
+        entityType: "district" as const,
         entityId: district.id,
         slug: district.slug,
         label: district.markerLabel ?? district.name.slice(0, 1),
@@ -121,8 +99,27 @@ export async function getProjectMasterplan(
         href: `/projects/${project.slug}/districts/${district.slug}`,
         sortOrder: district.sortOrder,
       };
-    },
-  );
+    });
+}
+
+/**
+ * Loads masterplan payload from Neon.
+ * Missing project → demo placeholder (local QA).
+ * Real project without asset → placeholder aerial + real mapped districts only
+ * (never invents fake district-a…d hrefs under a live project).
+ */
+export async function getProjectMasterplan(
+  projectSlug: string,
+): Promise<MasterplanPayload | null> {
+  const project = await loadProject(projectSlug);
+
+  if (!project) {
+    return getPlaceholderMasterplanPayload(projectSlug);
+  }
+
+  const asset = project.masterplanAssets[0];
+  const hotspots = buildHotspots(project);
+  const placeholder = getPlaceholderMasterplanPayload(project.slug);
 
   return {
     project: {
@@ -132,17 +129,19 @@ export async function getProjectMasterplan(
       description: project.description,
       location: project.location,
     },
-    asset: {
-      id: asset.id,
-      imageUrl: asset.imageUrl,
-      mobileImageUrl: asset.mobileImageUrl,
-      width: asset.width,
-      height: asset.height,
-      viewBox: asset.viewBox,
-      initialZoom: asset.initialZoom,
-      minZoom: asset.minZoom,
-      maxZoom: asset.maxZoom,
-    },
+    asset: asset
+      ? {
+          id: asset.id,
+          imageUrl: asset.imageUrl,
+          mobileImageUrl: asset.mobileImageUrl,
+          width: asset.width,
+          height: asset.height,
+          viewBox: asset.viewBox,
+          initialZoom: asset.initialZoom,
+          minZoom: asset.minZoom,
+          maxZoom: asset.maxZoom,
+        }
+      : placeholder.asset,
     hotspots,
   };
 }

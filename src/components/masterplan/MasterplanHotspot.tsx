@@ -2,6 +2,7 @@
 
 import type { SpatialHotspotBase } from "@/types/spatial";
 import { normalizedToPercent } from "@/lib/coordinates";
+import { isMutedSpatialStatus } from "@/lib/spatial-status";
 
 type MasterplanHotspotProps = {
   hotspot: SpatialHotspotBase;
@@ -46,11 +47,7 @@ export function MasterplanHotspot({
     y: hotspot.markerY,
   });
 
-  const muted =
-    hotspot.status === "COMING_SOON" ||
-    hotspot.status === "SOLD_OUT" ||
-    hotspot.status === "DISABLED";
-
+  const muted = isMutedSpatialStatus(hotspot.status);
   const scale = isHovered || isSelected || isFocused ? 1.12 : 1;
 
   return (

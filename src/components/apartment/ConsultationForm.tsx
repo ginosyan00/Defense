@@ -13,24 +13,14 @@ export function ConsultationForm({
   apartmentNumber,
   reservationDisabled,
 }: ConsultationFormProps) {
-  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"consult" | "reserve">("consult");
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    // Phase 7 will persist Lead / Reservation with conflict protection.
-    setSubmitted(true);
-  }
-
-  if (submitted) {
-    return (
-      <div className="border border-[var(--mp-line)] bg-[var(--mp-panel)] p-5 text-sm">
-        Հարցումը ընդունված է։ Մեր մասնագետը կապ կհաստատի ձեզ հետ։
-        <p className="mt-2 text-xs text-[var(--mp-ink-muted)]">
-          ({mode === "reserve" ? "Ամրագրում" : "Խորհրդատվություն"} ·{" "}
-          {apartmentSlug})
-        </p>
-      </div>
+    // Persistence (Lead / Reservation) is not wired yet — do not fake success.
+    setError(
+      "Հարցումների համակարգը դեռ միացված չէ։ Խնդրում ենք կապվել վաճառքի բաժնի հետ անմիջապես։",
     );
   }
 
@@ -47,7 +37,10 @@ export function ConsultationForm({
               ? "border-[var(--mp-ink)] bg-[var(--mp-ink)] text-[var(--mp-panel)]"
               : "border-[var(--mp-line)]"
           }`}
-          onClick={() => setMode("consult")}
+          onClick={() => {
+            setMode("consult");
+            setError(null);
+          }}
         >
           Խորհրդատվություն
         </button>
@@ -59,7 +52,10 @@ export function ConsultationForm({
               : "border-[var(--mp-line)]"
           }`}
           disabled={reservationDisabled}
-          onClick={() => setMode("reserve")}
+          onClick={() => {
+            setMode("reserve");
+            setError(null);
+          }}
         >
           Ամրագրում
         </button>
@@ -74,6 +70,7 @@ export function ConsultationForm({
 
       <p className="text-sm text-[var(--mp-ink-muted)]">
         Բնակարան {apartmentNumber}
+        <span className="sr-only"> ({apartmentSlug})</span>
       </p>
 
       <label className="block text-sm">
@@ -109,6 +106,12 @@ export function ConsultationForm({
           className="mt-1 w-full border border-[var(--mp-line)] bg-transparent px-3 py-2"
         />
       </label>
+
+      {error ? (
+        <p className="text-sm text-[var(--mp-ink-muted)]" role="alert">
+          {error}
+        </p>
+      ) : null}
 
       <button
         type="submit"

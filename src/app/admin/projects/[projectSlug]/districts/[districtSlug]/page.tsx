@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DistrictBuildingEditor } from "@/components/admin/DistrictBuildingEditor";
 import { DistrictPlanImageUploader } from "@/components/admin/DistrictPlanImageUploader";
+import { getDistrictPlaceholderAsset } from "@/lib/district/placeholder-asset";
 import { prisma } from "@/lib/db";
 
 type PageProps = {
@@ -31,14 +32,11 @@ export default async function AdminDistrictEditorPage({ params }: PageProps) {
   if (!district) notFound();
 
   const asset = district.masterplanAssets[0];
-  const imageUrl =
-    asset?.imageUrl ??
-    (districtSlug === "district-b"
-      ? "/masterplans/district-b-placeholder.svg"
-      : "/masterplans/district-a-aerial.png");
-  const width = asset?.width ?? 1024;
-  const height = asset?.height ?? 512;
-  const viewBox = asset?.viewBox ?? `0 0 ${width} ${height}`;
+  const placeholder = getDistrictPlaceholderAsset(districtSlug);
+  const imageUrl = asset?.imageUrl ?? placeholder.imageUrl;
+  const width = asset?.width ?? placeholder.width;
+  const height = asset?.height ?? placeholder.height;
+  const viewBox = asset?.viewBox ?? placeholder.viewBox;
   const [viewW, viewH] = parseViewBox(viewBox, width, height);
   const cacheBusted = `${imageUrl}${imageUrl.includes("?") ? "&" : "?"}v=${district.updatedAt.getTime()}`;
 

@@ -11,6 +11,7 @@ import { MasterplanImage } from "@/components/masterplan/MasterplanImage";
 import { MasterplanSvgOverlay } from "@/components/masterplan/MasterplanSvgOverlay";
 import { MasterplanViewport } from "@/components/masterplan/MasterplanViewport";
 import { normalizedToPercent } from "@/lib/coordinates";
+import { canNavigateSpatialStatus } from "@/lib/spatial-status";
 import type { DistrictPlanPayload } from "@/types/district-plan";
 
 type InteractiveDistrictPlanProps = {
@@ -88,11 +89,14 @@ export function InteractiveDistrictPlan({
       if (isCoarsePointer) {
         setSelectedId(id);
         setHoveredId(null);
+        setTooltipPinned(false);
         return;
       }
 
-      if (building.status === "COMING_SOON") {
+      if (!canNavigateSpatialStatus(building.status)) {
         setSelectedId(id);
+        setHoveredId(id);
+        setTooltipPinned(true);
         return;
       }
 
@@ -189,6 +193,7 @@ export function InteractiveDistrictPlan({
                 onTooltipLeave={() => {
                   setTooltipPinned(false);
                   setHoveredId(null);
+                  setSelectedId(null);
                 }}
               />
             </div>
@@ -222,7 +227,7 @@ export function InteractiveDistrictPlan({
         <BuildingList
           buildings={buildings}
           activeId={activeId}
-          onHover={setHoveredId}
+          onHover={onHoverBuilding}
         />
       </div>
     </div>
