@@ -17,11 +17,11 @@ export default function AdminLayout({
               Admin · Mapping
             </Link>
             <p className="mt-1 text-xs text-[var(--mp-ink-muted)]">
-              Visual spatial editors · auth hardening TBD · normalized coords only
+              Նախագիծ → Create → 4 փուլ mapping առանձին
             </p>
           </div>
           <Link
-            href="/projects/defense-residence"
+            href="/"
             className="text-xs uppercase tracking-[0.14em] text-[var(--mp-ink-muted)] underline-offset-4 hover:underline"
           >
             Public site

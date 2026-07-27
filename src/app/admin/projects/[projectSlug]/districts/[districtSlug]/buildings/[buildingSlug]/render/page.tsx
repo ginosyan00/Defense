@@ -45,10 +45,10 @@ export default async function AdminBuildingRenderMappingPage({
     <main className="space-y-6">
       <div>
         <Link
-          href="/admin"
+          href={`/admin/projects/${projectSlug}`}
           className="text-xs uppercase tracking-[0.14em] text-[var(--mp-ink-muted)] underline-offset-4 hover:underline"
         >
-          ← Admin
+          ← Նախագիծ
         </Link>
         <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl">
           Floor mapping · {building.name}

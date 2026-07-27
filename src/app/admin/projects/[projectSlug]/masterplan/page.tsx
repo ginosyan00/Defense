@@ -33,10 +33,10 @@ export default async function AdminMasterplanPage({ params }: PageProps) {
     <main className="space-y-6">
       <div>
         <Link
-          href="/admin"
+          href={`/admin/projects/${project.slug}`}
           className="text-xs uppercase tracking-[0.14em] text-[var(--mp-ink-muted)] underline-offset-4 hover:underline"
         >
-          ← Admin
+          ← {project.name}
         </Link>
         <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl">
           Masterplan editor · {project.name}
