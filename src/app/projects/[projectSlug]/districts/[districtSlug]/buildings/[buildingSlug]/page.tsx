@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BuildingRenderViewer } from "@/components/building/BuildingRenderViewer";
 import { Building3DViewerLazy } from "@/components/building-3d/Building3DViewerLazy";
+import { PageHero } from "@/components/site/PageHero";
 import { getBuilding3DPayload } from "@/lib/building/get-building-3d";
 import { getBuildingRenderPayload } from "@/lib/building/get-building-render";
 import { prisma } from "@/lib/db";
@@ -60,34 +61,42 @@ export default async function BuildingPage({ params }: BuildingPageProps) {
   ]);
 
   const hasFloors = building.floors.length > 0;
+  const projectHref = `/projects/${projectSlug}`;
+  const districtHref = `/projects/${projectSlug}/districts/${districtSlug}`;
+  const buildingHref = `${districtHref}/buildings/${buildingSlug}`;
 
   return (
     <main className="min-h-full bg-[var(--mp-canvas)] text-[var(--mp-ink)]">
-      <header className="border-b border-[var(--mp-line)] px-4 py-5 md:px-8">
-        <div className="mx-auto max-w-[1600px]">
-          <p className="text-xs uppercase tracking-[0.18em] text-[var(--mp-ink-muted)]">
+      <PageHero
+        eyebrow={
+          <>
             <Link
-              href={`/projects/${projectSlug}`}
+              href={projectHref}
               className="underline-offset-4 hover:underline"
             >
               {building.district.project.name}
             </Link>
             <span aria-hidden> / </span>
             <Link
-              href={`/projects/${projectSlug}/districts/${districtSlug}`}
+              href={districtHref}
               className="underline-offset-4 hover:underline"
             >
               {building.district.name}
             </Link>
-          </p>
-          <h1 className="mt-2 font-[family-name:var(--font-display)] text-4xl md:text-5xl">
-            {building.name}
-          </h1>
-          <p className="mt-3 max-w-3xl text-[var(--mp-ink-muted)]">
-            {building.description}
-          </p>
-        </div>
-      </header>
+          </>
+        }
+        title={building.name}
+        description={building.description}
+        backHref={districtHref}
+        backLabel="Թաղամաս"
+        activeStep={3}
+        stepHrefs={{
+          1: projectHref,
+          2: districtHref,
+          3: buildingHref,
+        }}
+        guidance="Փուլ 3 · Ընտրիր հարկը 3D-ից, նկարից կամ ներքևի ցանկից՝ հատակագիծը բացելու համար։"
+      />
 
       {payload3d && hasFloors ? (
         <section className="mx-auto max-w-[1600px] px-4 py-8 md:px-8">
@@ -105,9 +114,12 @@ export default async function BuildingPage({ params }: BuildingPageProps) {
       ) : null}
 
       <section className="mx-auto max-w-[1600px] px-4 py-8 md:px-8">
-        <h2 className="mb-4 font-[family-name:var(--font-display)] text-2xl">
+        <h2 className="mb-2 font-[family-name:var(--font-display)] text-2xl">
           Շենքի նկար
         </h2>
+        <p className="mb-4 text-sm text-[var(--mp-ink-muted)]">
+          Ստատիկ render · հարկերի polygon-ները clickable են։
+        </p>
         {renderPayload && renderPayload.floors.length > 0 ? (
           <BuildingRenderViewer
             imageUrl={renderPayload.building.imageUrl}
@@ -125,7 +137,7 @@ export default async function BuildingPage({ params }: BuildingPageProps) {
       </section>
 
       <section className="mx-auto max-w-[1600px] px-4 pb-12 md:px-8">
-        <h2 className="mb-3 font-[family-name:var(--font-display)] text-2xl">
+        <h2 className="mb-2 font-[family-name:var(--font-display)] text-2xl">
           Հարկերի ցանկ
         </h2>
         <p className="mb-4 text-sm text-[var(--mp-ink-muted)]">
@@ -140,7 +152,7 @@ export default async function BuildingPage({ params }: BuildingPageProps) {
             {building.floors.map((floor) => (
               <li key={floor.id}>
                 <Link
-                  href={`/projects/${projectSlug}/districts/${districtSlug}/buildings/${buildingSlug}/floors/${floor.floorNumber}`}
+                  href={`${buildingHref}/floors/${floor.floorNumber}`}
                   className="flex items-center justify-between px-4 py-3 text-sm transition hover:bg-[var(--mp-panel-hover)]"
                 >
                   <span>{floor.name}</span>

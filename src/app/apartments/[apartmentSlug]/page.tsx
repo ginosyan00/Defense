@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ApartmentPlanDrawing } from "@/components/apartment/ApartmentPlanDrawing";
 import { ConsultationForm } from "@/components/apartment/ConsultationForm";
+import { PageHero } from "@/components/site/PageHero";
 import { getApartmentDetails } from "@/lib/apartment/get-apartment-details";
 import {
   apartmentStatusLabel,
@@ -36,27 +37,31 @@ export default async function ApartmentPage({ params }: ApartmentPageProps) {
   const reservationDisabled =
     apartment.status === "SOLD" || apartment.status === "RESERVED";
 
+  const projectHref = `/projects/${payload.project.slug}`;
+  const districtHref = `${projectHref}/districts/${payload.district.slug}`;
+  const buildingHref = `${districtHref}/buildings/${payload.building.slug}`;
+
   return (
     <main className="min-h-full bg-[var(--mp-canvas)] text-[var(--mp-ink)]">
-      <header className="border-b border-[var(--mp-line)] px-4 py-5 md:px-8">
-        <div className="mx-auto max-w-5xl">
-          <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--mp-ink-muted)]">
+      <PageHero
+        eyebrow={
+          <>
             <Link
-              href={`/projects/${payload.project.slug}`}
+              href={projectHref}
               className="underline-offset-4 hover:underline"
             >
               {payload.project.name}
             </Link>
             <span aria-hidden> / </span>
             <Link
-              href={`/projects/${payload.project.slug}/districts/${payload.district.slug}`}
+              href={districtHref}
               className="underline-offset-4 hover:underline"
             >
               {payload.district.name}
             </Link>
             <span aria-hidden> / </span>
             <Link
-              href={`/projects/${payload.project.slug}/districts/${payload.district.slug}/buildings/${payload.building.slug}`}
+              href={buildingHref}
               className="underline-offset-4 hover:underline"
             >
               {payload.building.name}
@@ -68,15 +73,21 @@ export default async function ApartmentPage({ params }: ApartmentPageProps) {
             >
               {payload.floor.name}
             </Link>
-          </p>
-          <h1 className="mt-2 font-[family-name:var(--font-display)] text-4xl md:text-5xl">
-            Բնակարան {apartment.apartmentNumber}
-          </h1>
-          <p className="mt-2 text-sm uppercase tracking-[0.16em] text-[var(--mp-ink-muted)]">
-            {apartmentStatusLabel(apartment.status)}
-          </p>
-        </div>
-      </header>
+          </>
+        }
+        title={`Բնակարան ${apartment.apartmentNumber}`}
+        description={apartmentStatusLabel(apartment.status)}
+        backHref={payload.floorPlanHref}
+        backLabel="Հատակագիծ"
+        activeStep={4}
+        stepHrefs={{
+          1: projectHref,
+          2: districtHref,
+          3: payload.floorPlanHref,
+          4: `/apartments/${apartment.slug}`,
+        }}
+        guidance="Փուլ 4 · Դիտիր մանրամասները և ուղարկիր խորհրդատվության կամ ամրագրման հարցում։"
+      />
 
       <div className="mx-auto grid max-w-5xl gap-10 px-4 py-10 md:grid-cols-[1.2fr_0.8fr] md:px-8">
         <section className="space-y-8">

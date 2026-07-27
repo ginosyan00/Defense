@@ -10,6 +10,7 @@ import { MasterplanHotspot } from "@/components/masterplan/MasterplanHotspot";
 import { MasterplanImage } from "@/components/masterplan/MasterplanImage";
 import { MasterplanSvgOverlay } from "@/components/masterplan/MasterplanSvgOverlay";
 import { MasterplanViewport } from "@/components/masterplan/MasterplanViewport";
+import { EyeIcon, EyeOffIcon } from "@/components/site/EyeIcons";
 import { normalizedToPercent } from "@/lib/coordinates";
 import { canNavigateSpatialStatus } from "@/lib/spatial-status";
 import type { DistrictPlanPayload } from "@/types/district-plan";
@@ -28,6 +29,7 @@ export function InteractiveDistrictPlan({
   payload,
 }: InteractiveDistrictPlanProps) {
   const router = useRouter();
+  const [isEditing, setIsEditing] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -62,6 +64,25 @@ export function InteractiveDistrictPlan({
   const activeId = hoveredId ?? selectedId ?? focusedId;
   const activeBuilding = buildings.find((b) => b.id === activeId) ?? null;
 
+  const clearInteractionState = useCallback(() => {
+    if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current);
+    setHoveredId(null);
+    setSelectedId(null);
+    setFocusedId(null);
+    setTooltipPinned(false);
+  }, []);
+
+  const exitEditMode = useCallback(() => {
+    clearInteractionState();
+    controlsRef.current.reset();
+    setIsEditing(false);
+  }, [clearInteractionState]);
+
+  const enterEditMode = useCallback(() => {
+    clearInteractionState();
+    setIsEditing(true);
+  }, [clearInteractionState]);
+
   const clearHoverSoon = useCallback(() => {
     if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current);
     hoverClearTimer.current = setTimeout(() => {
@@ -71,6 +92,7 @@ export function InteractiveDistrictPlan({
 
   const onHoverBuilding = useCallback(
     (id: string | null) => {
+      if (!isEditing) return;
       if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current);
       if (id) {
         setHoveredId(id);
@@ -78,11 +100,12 @@ export function InteractiveDistrictPlan({
       }
       clearHoverSoon();
     },
-    [clearHoverSoon],
+    [clearHoverSoon, isEditing],
   );
 
   const onSelect = useCallback(
     (id: string) => {
+      if (!isEditing) return;
       const building = buildings.find((b) => b.id === id);
       if (!building || building.status === "DISABLED") return;
 
@@ -102,7 +125,7 @@ export function InteractiveDistrictPlan({
 
       router.push(building.href);
     },
-    [buildings, isCoarsePointer, router],
+    [buildings, isCoarsePointer, isEditing, router],
   );
 
   const onView = useCallback(
@@ -132,6 +155,7 @@ export function InteractiveDistrictPlan({
           minZoom={payload.asset.minZoom}
           maxZoom={payload.asset.maxZoom}
           initialZoom={payload.asset.initialZoom}
+          interactionEnabled={isEditing}
           onZoomControlsRef={bindControls}
         >
           {({ contentBounds }) => (
@@ -154,9 +178,10 @@ export function InteractiveDistrictPlan({
               <MasterplanSvgOverlay
                 viewBox={payload.asset.viewBox}
                 hotspots={buildings}
-                hoveredId={hoveredId}
-                selectedId={selectedId}
-                focusedId={focusedId}
+                hoveredId={isEditing ? hoveredId : null}
+                selectedId={isEditing ? selectedId : null}
+                focusedId={isEditing ? focusedId : null}
+                interactive={isEditing}
                 onHover={onHoverBuilding}
                 onSelect={onSelect}
               />
@@ -164,54 +189,80 @@ export function InteractiveDistrictPlan({
                 <MasterplanHotspot
                   key={`marker-${building.id}`}
                   hotspot={building}
-                  isHovered={building.id === hoveredId}
-                  isSelected={building.id === selectedId}
-                  isFocused={building.id === focusedId}
+                  isHovered={isEditing && building.id === hoveredId}
+                  isSelected={isEditing && building.id === selectedId}
+                  isFocused={isEditing && building.id === focusedId}
+                  interactive={isEditing}
                   onHover={onHoverBuilding}
                   onSelect={onSelect}
-                  onFocus={setFocusedId}
+                  onFocus={isEditing ? setFocusedId : () => undefined}
                 />
               ))}
-              <BuildingTooltip
-                building={
-                  !isCoarsePointer && (hoveredId || tooltipPinned)
-                    ? activeBuilding
-                    : null
-                }
-                anchor={tooltipAnchor}
-                visible={
-                  !isCoarsePointer &&
-                  Boolean(hoveredId || tooltipPinned) &&
-                  Boolean(activeBuilding)
-                }
-                onView={onView}
-                onTooltipEnter={() => {
-                  if (hoverClearTimer.current)
-                    clearTimeout(hoverClearTimer.current);
-                  setTooltipPinned(true);
-                }}
-                onTooltipLeave={() => {
-                  setTooltipPinned(false);
-                  setHoveredId(null);
-                  setSelectedId(null);
-                }}
-              />
+              {isEditing ? (
+                <BuildingTooltip
+                  building={
+                    !isCoarsePointer && (hoveredId || tooltipPinned)
+                      ? activeBuilding
+                      : null
+                  }
+                  anchor={tooltipAnchor}
+                  visible={
+                    !isCoarsePointer &&
+                    Boolean(hoveredId || tooltipPinned) &&
+                    Boolean(activeBuilding)
+                  }
+                  onView={onView}
+                  onTooltipEnter={() => {
+                    if (hoverClearTimer.current)
+                      clearTimeout(hoverClearTimer.current);
+                    setTooltipPinned(true);
+                  }}
+                  onTooltipLeave={() => {
+                    setTooltipPinned(false);
+                    setHoveredId(null);
+                    setSelectedId(null);
+                  }}
+                />
+              ) : null}
             </div>
           )}
         </MasterplanViewport>
 
-        <MasterplanControls
-          onZoomIn={() => controlsRef.current.zoomIn()}
-          onZoomOut={() => controlsRef.current.zoomOut()}
-          onReset={() => controlsRef.current.reset()}
-        />
+        <div className="absolute top-[max(1rem,env(safe-area-inset-top))] right-[max(1rem,env(safe-area-inset-right))] z-30">
+          <button
+            type="button"
+            className="flex h-10 w-10 items-center justify-center border border-[var(--mp-line)] bg-[var(--mp-panel)] text-[var(--mp-ink)] shadow-sm transition hover:bg-[var(--mp-panel-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--mp-focus)]"
+            onClick={() => {
+              if (isEditing) exitEditMode();
+              else enterEditMode();
+            }}
+            aria-pressed={isEditing}
+            aria-label={
+              isEditing
+                ? "Վերադառնալ նկարի ռեժիմ"
+                : "Բացել ինտերակտիվ ռեժիմ"
+            }
+            title={isEditing ? "Նկար" : "Ինտերակտիվ"}
+          >
+            {isEditing ? <EyeOffIcon /> : <EyeIcon />}
+          </button>
+        </div>
+
+        {isEditing ? (
+          <MasterplanControls
+            onZoomIn={() => controlsRef.current.zoomIn()}
+            onZoomOut={() => controlsRef.current.zoomOut()}
+            onReset={() => controlsRef.current.reset()}
+          />
+        ) : null}
+
         <BuildingMobileSheet
           building={
             selectedId
               ? (buildings.find((b) => b.id === selectedId) ?? null)
               : null
           }
-          open={isCoarsePointer && Boolean(selectedId)}
+          open={isEditing && isCoarsePointer && Boolean(selectedId)}
           onClose={() => setSelectedId(null)}
           onView={onView}
         />
@@ -222,11 +273,12 @@ export function InteractiveDistrictPlan({
           Շենքեր
         </h2>
         <p className="mb-4 text-sm text-[var(--mp-ink-muted)]">
-          Ցանկը համաժամեցված է aerial overlay-ի հետ և հասանելի է ստեղնաշարով։
+          Ցանկը համաժամեցված է aerial overlay-ի հետ և հասանելի է ստեղնաշարով՝
+          որպես Փուլ 2-ի fallback։
         </p>
         <BuildingList
           buildings={buildings}
-          activeId={activeId}
+          activeId={isEditing ? activeId : null}
           onHover={onHoverBuilding}
         />
       </div>
