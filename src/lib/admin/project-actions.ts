@@ -201,17 +201,7 @@ export async function createBuilding(input: {
       sortOrder,
       status: "UNDER_CONSTRUCTION",
       interactionType: "MARKER_AND_POLYGON",
-      floors: {
-        create: Array.from({ length: 5 }, (_, index) => {
-          const floorNumber = index + 1;
-          return {
-            floorNumber,
-            name: `Հարկ ${floorNumber}`,
-            meshName: `Floor_${String(floorNumber).padStart(2, "0")}`,
-            sortOrder: floorNumber,
-          };
-        }),
-      },
+      // Floors are created in Phase 3 (count + render image setup).
     },
   });
 

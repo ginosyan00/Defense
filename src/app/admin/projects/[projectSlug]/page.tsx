@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminPhaseCard } from "@/components/admin/AdminPhaseCard";
+import { BuildingFloorSetupForm } from "@/components/admin/BuildingFloorSetupForm";
 import { CreateEntityForm } from "@/components/admin/CreateProjectForm";
 import { prisma } from "@/lib/db";
 
@@ -70,13 +71,10 @@ export default async function AdminProjectPage({ params }: PageProps) {
   const unfinishedBuilding =
     allBuildings.find(
       (b) =>
-        b.floors.some((f) => f.markerX == null && !f.svgPath) ||
-        b.floors.length === 0,
-    ) ??
-    allBuildings.find((b) =>
-      b.floors.some((f) => f.markerX == null && !f.svgPath),
-    ) ??
-    allBuildings[0];
+        !b.previewImageUrl ||
+        b.floors.length === 0 ||
+        b.floors.some((f) => f.markerX == null && !f.svgPath),
+    ) ?? allBuildings[0];
 
   const floorsTotal = allBuildings.reduce((sum, b) => sum + b.floors.length, 0);
   const floorsDone = allBuildings.reduce(
@@ -285,37 +283,31 @@ export default async function AdminProjectPage({ params }: PageProps) {
           title="Հարկեր"
           hint={
             unfinishedBuilding
-              ? `${unfinishedBuilding.name}-ի render-ի վրա գծիր հարկերը (կամ ավելացրու նոր հարկ)։`
+              ? `${unfinishedBuilding.name}՝ գրիր հարկերի քանակը + upload նկար, հետո գծիր հարկերը։`
               : "Շենքի նկարի վրա գծիր հարկերը։"
           }
           state={activeStep === 3 ? "active" : phase3Done ? "done" : "locked"}
           progressLabel={`${floorsDone}/${floorsTotal || 0} mapped`}
-          addHref={floorsTotal > 0 || unfinishedBuilding ? phase3Href : undefined}
+          addHref={
+            unfinishedBuilding?.previewImageUrl && floorsTotal > 0
+              ? phase3Href
+              : undefined
+          }
           addLabel={
             unfinishedBuilding
-              ? `Add · հարկեր map · ${unfinishedBuilding.name}`
-              : "Add · հարկեր map"
+              ? `Աշխատանքային · ${unfinishedBuilding.name}`
+              : "Աշխատանքային"
           }
           extras={activeStep === 3 ? phase3Extras : []}
         >
           {unfinishedBuilding ? (
-            <CreateEntityForm
-              title={`Create հարկ · ${unfinishedBuilding.name}`}
-              submitLabel="Create հարկ"
-              action="floor"
-              hidden={{
-                projectSlug: project.slug,
-                districtSlug: unfinishedBuilding.districtSlug,
-                buildingSlug: unfinishedBuilding.slug,
-              }}
-              fields={[
-                {
-                  name: "name",
-                  label: "Անուն (ոչ պարտադիր)",
-                  placeholder: "Հարկ 6",
-                  required: false,
-                },
-              ]}
+            <BuildingFloorSetupForm
+              projectSlug={project.slug}
+              districtSlug={unfinishedBuilding.districtSlug}
+              buildingSlug={unfinishedBuilding.slug}
+              buildingName={unfinishedBuilding.name}
+              initialFloorCount={Math.max(unfinishedBuilding.floors.length, 1)}
+              hasImage={Boolean(unfinishedBuilding.previewImageUrl)}
             />
           ) : null}
         </AdminPhaseCard>
