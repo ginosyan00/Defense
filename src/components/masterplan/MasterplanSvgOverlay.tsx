@@ -93,16 +93,16 @@ export function MasterplanSvgOverlay({
             fill={
               isActive
                 ? muted
-                  ? "rgba(196, 168, 120, 0.32)"
-                  : "rgba(214, 190, 140, 0.42)"
+                  ? "rgba(210, 130, 70, 0.28)"
+                  : "rgba(232, 140, 72, 0.36)"
                 : muted
-                  ? "rgba(196, 168, 120, 0.12)"
-                  : "rgba(214, 190, 140, 0.16)"
+                  ? "rgba(210, 130, 70, 0.14)"
+                  : "rgba(232, 140, 72, 0.2)"
             }
             stroke={
               isActive
-                ? "rgba(245, 232, 205, 0.95)"
-                : "rgba(138, 115, 72, 0.55)"
+                ? "rgba(255, 176, 110, 0.95)"
+                : "rgba(196, 100, 45, 0.7)"
             }
             strokeWidth={isActive ? 3 : 1.5}
             filter={isActive ? "url(#mp-glow)" : undefined}

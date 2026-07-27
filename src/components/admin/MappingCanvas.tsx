@@ -410,10 +410,10 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
                     d={entity.svgPath}
                     fill={
                       entity.id === selectedId
-                        ? "rgba(214,190,140,0.35)"
-                        : "rgba(214,190,140,0.12)"
+                        ? "rgba(232,140,72,0.32)"
+                        : "rgba(232,140,72,0.16)"
                     }
-                    stroke={entity.id === selectedId ? "#8a7348" : "#6d675c"}
+                    stroke={entity.id === selectedId ? "#c45c26" : "#d4894a"}
                     strokeWidth={entity.id === selectedId ? 3 : 1.5}
                   />
                 ) : null,
