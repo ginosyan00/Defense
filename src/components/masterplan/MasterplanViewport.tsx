@@ -27,6 +27,8 @@ type MasterplanViewportProps = {
   minZoom: number;
   maxZoom: number;
   initialZoom: number;
+  /** When false, pan/zoom/keyboard are locked — viewport acts like a still image. */
+  interactionEnabled?: boolean;
   children: (args: {
     contentBounds: Rect;
     transformStyle: string;
@@ -46,6 +48,7 @@ export function MasterplanViewport({
   minZoom,
   maxZoom,
   initialZoom,
+  interactionEnabled = true,
   children,
   onZoomControlsRef,
 }: MasterplanViewportProps) {
@@ -145,6 +148,7 @@ export function MasterplanViewport({
   }, [onZoomControlsRef, reset, zoomBy]);
 
   const onWheel = (event: WheelEvent<HTMLDivElement>) => {
+    if (!interactionEnabled) return;
     event.preventDefault();
     const el = viewportRef.current;
     if (!el) return;
@@ -157,6 +161,7 @@ export function MasterplanViewport({
   };
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!interactionEnabled) return;
     if (event.button !== 0) return;
     const target = event.target as HTMLElement;
     if (
@@ -179,6 +184,7 @@ export function MasterplanViewport({
   };
 
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!interactionEnabled) return;
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     const dx = event.clientX - drag.startX;
@@ -202,6 +208,7 @@ export function MasterplanViewport({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!interactionEnabled) return;
     const step = 40;
     if (event.key === "+" || event.key === "=") {
       event.preventDefault();
@@ -248,11 +255,15 @@ export function MasterplanViewport({
   return (
     <div
       ref={viewportRef}
-      className="masterplan-viewport relative h-[min(78dvh,820px)] w-full touch-none overflow-hidden bg-[var(--mp-stage)] outline-none"
-      role="application"
-      aria-roledescription="Interactive masterplan"
+      className={`masterplan-viewport relative h-[min(78dvh,820px)] w-full overflow-hidden bg-[var(--mp-stage)] outline-none ${
+        interactionEnabled ? "touch-none" : "touch-auto"
+      }`}
+      role={interactionEnabled ? "application" : "img"}
+      aria-roledescription={
+        interactionEnabled ? "Interactive masterplan" : undefined
+      }
       aria-labelledby={labelId}
-      tabIndex={0}
+      tabIndex={interactionEnabled ? 0 : undefined}
       onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -261,8 +272,9 @@ export function MasterplanViewport({
       onKeyDown={onKeyDown}
     >
       <span id={labelId} className="sr-only">
-        Project aerial masterplan. Use arrow keys to pan, plus and minus to zoom,
-        zero to reset.
+        {interactionEnabled
+          ? "Project aerial masterplan. Use arrow keys to pan, plus and minus to zoom, zero to reset."
+          : "Project aerial masterplan preview image."}
       </span>
       <div
         ref={transformLayerRef}

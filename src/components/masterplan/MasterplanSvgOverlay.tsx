@@ -9,6 +9,8 @@ type MasterplanSvgOverlayProps = {
   hoveredId: string | null;
   selectedId: string | null;
   focusedId: string | null;
+  /** When false, polygons are decorative only. */
+  interactive?: boolean;
   onHover: (id: string | null) => void;
   onSelect: (id: string) => void;
 };
@@ -19,18 +21,22 @@ export function MasterplanSvgOverlay({
   hoveredId,
   selectedId,
   focusedId,
+  interactive = true,
   onHover,
   onSelect,
 }: MasterplanSvgOverlayProps) {
-  const activeId = hoveredId ?? selectedId ?? focusedId;
+  const activeId = interactive
+    ? (hoveredId ?? selectedId ?? focusedId)
+    : null;
 
   return (
     <svg
       className="pointer-events-none absolute inset-0 h-full w-full"
       viewBox={viewBox}
       preserveAspectRatio="none"
-      role="group"
-      aria-label="Masterplan districts"
+      role={interactive ? "group" : "presentation"}
+      aria-label={interactive ? "Masterplan districts" : undefined}
+      aria-hidden={interactive ? undefined : true}
     >
       <defs>
         <filter id="mp-glow" x="-20%" y="-20%" width="140%" height="140%">
@@ -63,14 +69,16 @@ export function MasterplanSvgOverlay({
         }
 
         const isActive =
-          hotspot.id === hoveredId ||
-          hotspot.id === selectedId ||
-          hotspot.id === focusedId;
+          interactive &&
+          (hotspot.id === hoveredId ||
+            hotspot.id === selectedId ||
+            hotspot.id === focusedId);
         const muted = isMutedSpatialStatus(hotspot.status);
         const disabled = hotspot.status === "DISABLED";
-        // Markers already cover keyboard for MARKER_AND_POLYGON.
         const keyboardTarget =
-          hotspot.interactionType === "POLYGON" && !disabled;
+          interactive &&
+          hotspot.interactionType === "POLYGON" &&
+          !disabled;
 
         return (
           <path
@@ -78,7 +86,7 @@ export function MasterplanSvgOverlay({
             d={hotspot.svgPath}
             data-hotspot={hotspot.id}
             className={
-              disabled
+              !interactive || disabled
                 ? "pointer-events-none"
                 : "pointer-events-auto cursor-pointer outline-none focus-visible:stroke-[3] focus-visible:stroke-[var(--mp-focus)]"
             }
@@ -103,9 +111,11 @@ export function MasterplanSvgOverlay({
             aria-label={keyboardTarget ? hotspot.title : undefined}
             aria-hidden={keyboardTarget ? undefined : true}
             onMouseEnter={() => {
-              if (!disabled) onHover(hotspot.id);
+              if (interactive && !disabled) onHover(hotspot.id);
             }}
-            onMouseLeave={() => onHover(null)}
+            onMouseLeave={() => {
+              if (interactive) onHover(null);
+            }}
             onFocus={() => {
               if (keyboardTarget) onHover(hotspot.id);
             }}
@@ -120,7 +130,7 @@ export function MasterplanSvgOverlay({
               }
             }}
             onClick={() => {
-              if (!disabled) onSelect(hotspot.id);
+              if (interactive && !disabled) onSelect(hotspot.id);
             }}
           />
         );

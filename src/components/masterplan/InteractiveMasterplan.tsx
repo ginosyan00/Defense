@@ -26,6 +26,7 @@ type ZoomControls = {
 
 export function InteractiveMasterplan({ payload }: InteractiveMasterplanProps) {
   const router = useRouter();
+  const [isEditing, setIsEditing] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -61,6 +62,25 @@ export function InteractiveMasterplan({ payload }: InteractiveMasterplanProps) {
   const activeHotspot =
     visibleHotspots.find((h) => h.id === activeId) ?? null;
 
+  const clearInteractionState = useCallback(() => {
+    if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current);
+    setHoveredId(null);
+    setSelectedId(null);
+    setFocusedId(null);
+    setTooltipPinned(false);
+  }, []);
+
+  const exitEditMode = useCallback(() => {
+    clearInteractionState();
+    controlsRef.current.reset();
+    setIsEditing(false);
+  }, [clearInteractionState]);
+
+  const enterEditMode = useCallback(() => {
+    clearInteractionState();
+    setIsEditing(true);
+  }, [clearInteractionState]);
+
   const clearHoverSoon = useCallback(() => {
     if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current);
     hoverClearTimer.current = setTimeout(() => {
@@ -70,6 +90,7 @@ export function InteractiveMasterplan({ payload }: InteractiveMasterplanProps) {
 
   const onHoverHotspot = useCallback(
     (id: string | null) => {
+      if (!isEditing) return;
       if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current);
       if (id) {
         setHoveredId(id);
@@ -77,7 +98,7 @@ export function InteractiveMasterplan({ payload }: InteractiveMasterplanProps) {
       }
       clearHoverSoon();
     },
-    [clearHoverSoon],
+    [clearHoverSoon, isEditing],
   );
 
   const legendCounts = useMemo(
@@ -94,6 +115,7 @@ export function InteractiveMasterplan({ payload }: InteractiveMasterplanProps) {
 
   const onSelect = useCallback(
     (id: string) => {
+      if (!isEditing) return;
       const hotspot = visibleHotspots.find((h) => h.id === id);
       if (!hotspot || hotspot.status === "DISABLED") return;
 
@@ -113,7 +135,7 @@ export function InteractiveMasterplan({ payload }: InteractiveMasterplanProps) {
 
       router.push(hotspot.href);
     },
-    [isCoarsePointer, router, visibleHotspots],
+    [isCoarsePointer, isEditing, router, visibleHotspots],
   );
 
   const onView = useCallback(
@@ -142,6 +164,7 @@ export function InteractiveMasterplan({ payload }: InteractiveMasterplanProps) {
         minZoom={payload.asset.minZoom}
         maxZoom={payload.asset.maxZoom}
         initialZoom={payload.asset.initialZoom}
+        interactionEnabled={isEditing}
         onZoomControlsRef={bindControls}
       >
         {({ contentBounds }) => (
@@ -164,9 +187,10 @@ export function InteractiveMasterplan({ payload }: InteractiveMasterplanProps) {
             <MasterplanSvgOverlay
               viewBox={payload.asset.viewBox}
               hotspots={visibleHotspots}
-              hoveredId={hoveredId}
-              selectedId={selectedId}
-              focusedId={focusedId}
+              hoveredId={isEditing ? hoveredId : null}
+              selectedId={isEditing ? selectedId : null}
+              focusedId={isEditing ? focusedId : null}
+              interactive={isEditing}
               onHover={onHoverHotspot}
               onSelect={onSelect}
             />
@@ -174,57 +198,121 @@ export function InteractiveMasterplan({ payload }: InteractiveMasterplanProps) {
               <MasterplanHotspot
                 key={`marker-${hotspot.id}`}
                 hotspot={hotspot}
-                isHovered={hotspot.id === hoveredId}
-                isSelected={hotspot.id === selectedId}
-                isFocused={hotspot.id === focusedId}
+                isHovered={isEditing && hotspot.id === hoveredId}
+                isSelected={isEditing && hotspot.id === selectedId}
+                isFocused={isEditing && hotspot.id === focusedId}
+                interactive={isEditing}
                 onHover={onHoverHotspot}
                 onSelect={onSelect}
-                onFocus={setFocusedId}
+                onFocus={isEditing ? setFocusedId : () => undefined}
               />
             ))}
-            <MasterplanTooltip
-              hotspot={
-                !isCoarsePointer && (hoveredId || tooltipPinned)
-                  ? activeHotspot
-                  : null
-              }
-              anchor={tooltipAnchor}
-              visible={
-                !isCoarsePointer &&
-                Boolean(hoveredId || tooltipPinned) &&
-                Boolean(activeHotspot)
-              }
-              onView={onView}
-              onTooltipEnter={() => {
-                if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current);
-                setTooltipPinned(true);
-              }}
-              onTooltipLeave={() => {
-                setTooltipPinned(false);
-                setHoveredId(null);
-                setSelectedId(null);
-              }}
-            />
+            {isEditing ? (
+              <MasterplanTooltip
+                hotspot={
+                  !isCoarsePointer && (hoveredId || tooltipPinned)
+                    ? activeHotspot
+                    : null
+                }
+                anchor={tooltipAnchor}
+                visible={
+                  !isCoarsePointer &&
+                  Boolean(hoveredId || tooltipPinned) &&
+                  Boolean(activeHotspot)
+                }
+                onView={onView}
+                onTooltipEnter={() => {
+                  if (hoverClearTimer.current)
+                    clearTimeout(hoverClearTimer.current);
+                  setTooltipPinned(true);
+                }}
+                onTooltipLeave={() => {
+                  setTooltipPinned(false);
+                  setHoveredId(null);
+                  setSelectedId(null);
+                }}
+              />
+            ) : null}
           </div>
         )}
       </MasterplanViewport>
 
       <MasterplanLegend {...legendCounts} />
-      <MasterplanControls
-        onZoomIn={() => controlsRef.current.zoomIn()}
-        onZoomOut={() => controlsRef.current.zoomOut()}
-        onReset={() => controlsRef.current.reset()}
-      />
+
+      <div className="absolute top-[max(1rem,env(safe-area-inset-top))] right-[max(1rem,env(safe-area-inset-right))] z-30">
+        <button
+          type="button"
+          className="flex h-10 w-10 items-center justify-center border border-[var(--mp-line)] bg-[var(--mp-panel)] text-[var(--mp-ink)] shadow-sm transition hover:bg-[var(--mp-panel-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--mp-focus)]"
+          onClick={() => {
+            if (isEditing) exitEditMode();
+            else enterEditMode();
+          }}
+          aria-pressed={isEditing}
+          aria-label={isEditing ? "Վերադառնալ նկարի ռեժիմ" : "Բացել ինտերակտիվ ռեժիմ"}
+          title={isEditing ? "Նկար" : "Ինտերակտիվ"}
+        >
+          {isEditing ? <EyeOffIcon /> : <EyeIcon />}
+        </button>
+      </div>
+
+      {isEditing ? (
+        <MasterplanControls
+          onZoomIn={() => controlsRef.current.zoomIn()}
+          onZoomOut={() => controlsRef.current.zoomOut()}
+          onReset={() => controlsRef.current.reset()}
+        />
+      ) : null}
+
       <MasterplanMobileSheet
         hotspot={
           selectedId
             ? (visibleHotspots.find((h) => h.id === selectedId) ?? null)
             : null
         }
-        open={isCoarsePointer && Boolean(selectedId)}
+        open={isEditing && isCoarsePointer && Boolean(selectedId)}
         onClose={() => setSelectedId(null)}
         onView={onView}
       />
     </div>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3 3l18 18" />
+      <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+      <path d="M9.9 5.1A10.5 10.5 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.4" />
+      <path d="M6.1 6.1C3.9 7.7 2 12 2 12s3.5 7 10 7a10.2 10.2 0 0 0 4.4-1" />
+    </svg>
   );
 }
