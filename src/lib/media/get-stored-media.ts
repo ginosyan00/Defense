@@ -66,9 +66,34 @@ export async function warmMediaCache(
   await writeDisk(id, media);
 }
 
+async function readPublicUpload(id: string): Promise<CachedMedia | null> {
+  const dir = path.join(process.cwd(), "public", "uploads", "media");
+  const extensions = ["jpg", "jpeg", "png", "webp", "avif", "svg"];
+  for (const ext of extensions) {
+    try {
+      const filePath = path.join(dir, `${id}.${ext}`);
+      const data = await fs.readFile(filePath);
+      const mimeType =
+        ext === "png"
+          ? "image/png"
+          : ext === "webp"
+            ? "image/webp"
+            : ext === "avif"
+              ? "image/avif"
+              : ext === "svg"
+                ? "image/svg+xml"
+                : "image/jpeg";
+      return { data, mimeType, byteSize: data.byteLength };
+    } catch {
+      // try next extension
+    }
+  }
+  return null;
+}
+
 /**
- * Serves uploaded bytes with memory → disk → Neon fallback.
- * Neon Bytes round-trips are slow (~seconds); local cache makes home load fast.
+ * Serves uploaded bytes with memory → disk → public/uploads → Neon fallback.
+ * Neon Bytes round-trips are slow (~seconds); local paths make home load fast.
  */
 export async function getStoredMedia(id: string): Promise<CachedMedia | null> {
   const fromMemory = memoryCache.get(id);
@@ -78,6 +103,13 @@ export async function getStoredMedia(id: string): Promise<CachedMedia | null> {
   if (fromDisk) {
     memoryCache.set(id, fromDisk);
     return fromDisk;
+  }
+
+  const fromPublic = await readPublicUpload(id);
+  if (fromPublic) {
+    memoryCache.set(id, fromPublic);
+    void writeDisk(id, fromPublic);
+    return fromPublic;
   }
 
   const row = await prisma.storedMedia.findUnique({

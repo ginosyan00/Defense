@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { setupBuildingFloorsAndRender } from "@/lib/admin/setup-building-floors";
+import { prepareImageForUpload } from "@/lib/media/prepare-image-upload";
 
 type BuildingFloorSetupFormProps = {
   projectSlug: string;
@@ -12,24 +13,6 @@ type BuildingFloorSetupFormProps = {
   initialFloorCount: number;
   hasImage: boolean;
 };
-
-function readImageSize(file: File): Promise<{ width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      const width = image.naturalWidth;
-      const height = image.naturalHeight;
-      URL.revokeObjectURL(url);
-      resolve({ width, height });
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Նկարը չհաջողվեց կարդալ"));
-    };
-    image.src = url;
-  });
-}
 
 export function BuildingFloorSetupForm({
   projectSlug,
@@ -73,10 +56,10 @@ export function BuildingFloorSetupForm({
             let width: number | undefined;
             let height: number | undefined;
             if (file) {
-              const size = await readImageSize(file);
-              width = size.width;
-              height = size.height;
-              formData.set("file", file);
+              const prepared = await prepareImageForUpload(file);
+              width = prepared.width;
+              height = prepared.height;
+              formData.set("file", prepared.file);
             }
 
             const result = await setupBuildingFloorsAndRender({

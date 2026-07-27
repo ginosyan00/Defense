@@ -3,30 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { uploadMasterplanImage } from "@/lib/admin/upload-masterplan";
+import { prepareImageForUpload } from "@/lib/media/prepare-image-upload";
 
 type MasterplanImageUploaderProps = {
   projectId: string;
   projectSlug: string;
   currentImageUrl: string;
 };
-
-function readImageSize(file: File): Promise<{ width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      const width = image.naturalWidth;
-      const height = image.naturalHeight;
-      URL.revokeObjectURL(url);
-      resolve({ width, height });
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Նկարը չհաջողվեց կարդալ"));
-    };
-    image.src = url;
-  });
-}
 
 export function MasterplanImageUploader({
   projectId,
@@ -43,16 +26,16 @@ export function MasterplanImageUploader({
     if (!file) return;
 
     startTransition(async () => {
-      setMessage("Բեռնվում է…");
+      setMessage("Սեղմվում և բեռնվում է…");
       try {
-        const size = await readImageSize(file);
+        const prepared = await prepareImageForUpload(file);
         const formData = new FormData();
-        formData.set("file", file);
+        formData.set("file", prepared.file);
         const result = await uploadMasterplanImage({
           projectId,
           projectSlug,
-          width: size.width,
-          height: size.height,
+          width: prepared.width,
+          height: prepared.height,
           clearDistrictPolygons: true,
           formData,
         });
@@ -83,8 +66,8 @@ export function MasterplanImageUploader({
           </h2>
           <p className="mt-1 text-xs text-[var(--mp-ink-muted)]">
             Ամբողջ համալիրի aerial / site plan · PNG JPEG WebP AVIF SVG · մինչև
-            16MB · պահվում է բազայում։ Նոր նկարից հետո թաղամասերի հին
-            polygon-ները մաքրվում են։
+            16MB · մեծ նկարները ավտոմատ սեղմվում են։ Նոր նկարից հետո թաղամասերի
+            հին polygon-ները մաքրվում են։
           </p>
         </div>
         <button

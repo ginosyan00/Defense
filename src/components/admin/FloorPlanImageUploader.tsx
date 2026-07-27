@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { uploadFloorPlanImage } from "@/lib/admin/upload-floor-plan";
+import { prepareImageForUpload } from "@/lib/media/prepare-image-upload";
 
 type FloorPlanImageUploaderProps = {
   floorId: string;
@@ -14,22 +15,6 @@ type FloorPlanImageUploaderProps = {
   /** Open file picker automatically when landing with #upload */
   autoOpen?: boolean;
 };
-
-function readImageSize(file: File): Promise<{ width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve({ width: image.naturalWidth, height: image.naturalHeight });
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Նկարը չհաջողվեց կարդալ"));
-    };
-    image.src = url;
-  });
-}
 
 export function FloorPlanImageUploader({
   floorId,
@@ -78,19 +63,19 @@ export function FloorPlanImageUploader({
     if (!file) return;
 
     startTransition(async () => {
-      setMessage("Բեռնվում է…");
+      setMessage("Սեղմվում և բեռնվում է…");
       try {
-        const size = await readImageSize(file);
+        const prepared = await prepareImageForUpload(file);
         const formData = new FormData();
-        formData.set("file", file);
+        formData.set("file", prepared.file);
         const result = await uploadFloorPlanImage({
           floorId,
           projectSlug,
           districtSlug,
           buildingSlug,
           floorNumber,
-          width: size.width,
-          height: size.height,
+          width: prepared.width,
+          height: prepared.height,
           clearApartmentPolygons: true,
           formData,
         });

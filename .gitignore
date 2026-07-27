@@ -27,6 +27,8 @@
 .DS_Store
 *.pem
 .data/
+public/uploads/media/*
+!public/uploads/media/.gitkeep
 
 # debug
 npm-debug.log*

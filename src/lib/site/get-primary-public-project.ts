@@ -29,7 +29,10 @@ export async function getPrimaryPublicProject(): Promise<PrimaryPublicProject | 
     },
   });
 
-  if (preferred?.masterplanAssets[0]?.imageUrl.startsWith("/api/media/")) {
+  if (
+    preferred?.masterplanAssets[0]?.imageUrl.startsWith("/api/media/") ||
+    preferred?.masterplanAssets[0]?.imageUrl.startsWith("/uploads/")
+  ) {
     return {
       slug: preferred.slug,
       name: preferred.name,
@@ -44,7 +47,10 @@ export async function getPrimaryPublicProject(): Promise<PrimaryPublicProject | 
         some: {
           variant: "DESKTOP",
           districtId: null,
-          imageUrl: { startsWith: "/api/media/" },
+          OR: [
+            { imageUrl: { startsWith: "/api/media/" } },
+            { imageUrl: { startsWith: "/uploads/" } },
+          ],
         },
       },
     },
