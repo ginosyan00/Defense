@@ -39,8 +39,8 @@ export default async function ProjectMasterplanPage({
         backHref="/"
         backLabel="Գլխավոր"
         activeStep={1}
-        stepHrefs={{ 1: `/projects/${projectSlug}` }}
-        guidance="Փուլ 1 · Աչքի պատկերակով բացիր ինտերակտիվ ռեժիմը, ապա ընտրիր թաղամասը map-ից կամ ներքևի ցանկից։"
+        stepHrefs={{ 1: "/" }}
+        guidance="Փուլ 1 · Սեղմիր թաղամասի նշիչը կամ պոլիգոնը՝ շենքերի պլանին անցնելու համար։"
       />
 
       <section className="mx-auto max-w-[1600px] px-0 md:px-8 md:pt-6">

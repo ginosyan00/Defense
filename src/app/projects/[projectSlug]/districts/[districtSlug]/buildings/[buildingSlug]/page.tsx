@@ -61,7 +61,7 @@ export default async function BuildingPage({ params }: BuildingPageProps) {
   ]);
 
   const hasFloors = building.floors.length > 0;
-  const projectHref = `/projects/${projectSlug}`;
+  const projectHref = "/";
   const districtHref = `/projects/${projectSlug}/districts/${districtSlug}`;
   const buildingHref = `${districtHref}/buildings/${buildingSlug}`;
 

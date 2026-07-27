@@ -46,7 +46,7 @@ export default async function FloorPage({ params }: FloorPageProps) {
   );
   if (!payload) notFound();
 
-  const projectHref = `/projects/${projectSlug}`;
+  const projectHref = "/";
   const districtHref = `/projects/${projectSlug}/districts/${districtSlug}`;
   const buildingHref = `${districtHref}/buildings/${buildingSlug}`;
   const floorHref = `${buildingHref}/floors/${number}`;

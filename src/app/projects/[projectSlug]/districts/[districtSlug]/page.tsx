@@ -35,7 +35,7 @@ export default async function DistrictPage({ params }: DistrictPageProps) {
         eyebrow={
           <>
             <Link
-              href={`/projects/${projectSlug}`}
+              href="/"
               className="underline-offset-4 hover:underline"
             >
               {payload.project.name}
@@ -46,14 +46,14 @@ export default async function DistrictPage({ params }: DistrictPageProps) {
         }
         title={payload.district.name}
         description={payload.district.description}
-        backHref={`/projects/${projectSlug}`}
+        backHref="/"
         backLabel="Masterplan"
         activeStep={2}
         stepHrefs={{
-          1: `/projects/${projectSlug}`,
+          1: "/",
           2: `/projects/${projectSlug}/districts/${districtSlug}`,
         }}
-        guidance="Փուլ 2 · Աչքի պատկերակով բացիր ինտերակտիվ ռեժիմը և ընտրիր շենքը map-ից կամ ցանկից։"
+        guidance="Փուլ 2 · Սեղմիր շենքի նշիչը կամ պոլիգոնը՝ հարկերի ընտրությանը անցնելու համար։"
       />
 
       <section className="mx-auto max-w-[1600px] px-0 py-6 md:px-8">

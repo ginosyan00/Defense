@@ -1,11 +1,13 @@
 import Link from "next/link";
 
 type SiteHeaderProps = {
+  brandName?: string;
   masterplanHref?: string;
 };
 
 export function SiteHeader({
-  masterplanHref = "/projects/defense-residence",
+  brandName = "North Yard",
+  masterplanHref = "/",
 }: SiteHeaderProps) {
   return (
     <header className="border-b border-[var(--mp-line)] bg-[var(--mp-canvas)]/90 backdrop-blur-sm">
@@ -14,7 +16,7 @@ export function SiteHeader({
           href={masterplanHref}
           className="font-[family-name:var(--font-display)] text-xl tracking-wide text-[var(--mp-ink)] transition hover:opacity-80"
         >
-          Defense Residence
+          {brandName}
         </Link>
         <nav
           className="flex items-center gap-5 text-[11px] uppercase tracking-[0.18em] text-[var(--mp-ink-muted)]"
