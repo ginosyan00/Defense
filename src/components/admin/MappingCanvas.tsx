@@ -11,6 +11,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
+  appendSvgPaths,
   normalizedPointsToSvgPath,
   pointerToNormalized,
   svgPathToNormalizedPoints,
@@ -93,6 +94,7 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
     const selectedDraftIndexRef = useRef(selectedDraftIndex);
     const selectedIdRef = useRef(selectedId);
     const entitiesRef = useRef(entities);
+    const replaceOnCommitRef = useRef(false);
     useEffect(() => {
       draftRef.current = draftPoints;
     }, [draftPoints]);
@@ -129,17 +131,6 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
 
     const selected = entities.find((entity) => entity.id === selectedId) ?? null;
 
-    const loadSavedPolygonPoints = useCallback(
-      (entityId: string) => {
-        const path =
-          entitiesRef.current.find((entity) => entity.id === entityId)
-            ?.svgPath ?? null;
-        if (!path) return [] as Array<{ x: number; y: number }>;
-        return svgPathToNormalizedPoints(path, viewBoxWidth, viewBoxHeight);
-      },
-      [viewBoxHeight, viewBoxWidth],
-    );
-
     const readNormalized = (event: {
       clientX: number;
       clientY: number;
@@ -157,17 +148,27 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
     const commitDraft = useCallback(
       (points: Array<{ x: number; y: number }>, entityId: string) => {
         if (points.length < 1) return null;
-        const svgPath = normalizedPointsToSvgPath(
+        const nextSegment = normalizedPointsToSvgPath(
           points,
           viewBoxWidth,
           viewBoxHeight,
         );
-        if (!svgPath) return null;
+        if (!nextSegment) return null;
+
+        const existing =
+          entitiesRef.current.find((entity) => entity.id === entityId)
+            ?.svgPath ?? null;
+        const shouldReplace = replaceOnCommitRef.current || !existing;
+        const svgPath = shouldReplace
+          ? nextSegment
+          : appendSvgPaths(existing, nextSegment);
+        replaceOnCommitRef.current = false;
+
         onChangeEntity(entityId, { svgPath });
         onPolygonClosed?.(entityId, svgPath);
-        // Keep draft points so "continue drawing" appends to the same polygon.
-        draftRef.current = points;
-        setDraftPoints(points);
+        // Clear draft so the next stroke starts from a new click (not last point).
+        draftRef.current = [];
+        setDraftPoints([]);
         setSelectedDraftIndex(null);
         setMode("draw-polygon");
         return svgPath;
@@ -246,17 +247,13 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
         if (next === mode) return;
         if (!resolveOpenDraft()) return;
         setMode(next);
+        // Entering polygon mode starts a fresh stroke (saved shape stays visible).
         if (next === "draw-polygon") {
-          const entityId = selectedIdRef.current;
-          if (!entityId || draftRef.current.length > 0) return;
-          const saved = loadSavedPolygonPoints(entityId);
-          if (saved.length > 0) {
-            setSelectedDraftIndex(null);
-            replaceDraftPoints(saved);
-          }
+          replaceOnCommitRef.current = false;
+          clearDraft();
         }
       },
-      [loadSavedPolygonPoints, mode, replaceDraftPoints, resolveOpenDraft],
+      [clearDraft, mode, resolveOpenDraft],
     );
 
     useImperativeHandle(
@@ -360,12 +357,7 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
           }
         }
         setSelectedDraftIndex(null);
-        updateDraftPoints((prev) => {
-          // If draft was cleared but a saved polygon exists, continue from it.
-          const base =
-            prev.length > 0 ? prev : loadSavedPolygonPoints(selectedId);
-          return [...base, point];
-        });
+        updateDraftPoints((prev) => [...prev, point]);
       }
     };
 
@@ -397,6 +389,7 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
         onChangeEntity(selectedId, { svgPath: null });
         onPolygonDeleted?.(selectedId);
       }
+      replaceOnCommitRef.current = false;
       clearDraft();
       setMode("draw-polygon");
     };
@@ -465,6 +458,7 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
                 onClick={() => {
                   if (!selected.svgPath) return;
                   if (!resolveOpenDraft()) return;
+                  replaceOnCommitRef.current = true;
                   setMode("draw-polygon");
                   setSelectedDraftIndex(null);
                   replaceDraftPoints(
@@ -642,9 +636,9 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
         </div>
 
         <p className="text-xs text-[var(--mp-ink-muted)]">
-          Marker/Polygon mode-ում կարող ես սեղմել ցանկացած տեղ։ Գծերը կարող են
-          հատվել։ Save → շարունակիր գծել → նորից Save՝ հին գծագիրը մնում է։
-          Ամբողջությամբ նոր սկսելու համար՝ «Նոր polygon»։
+          Save-ից հետո հաջորդ կտտոցը սկսում է նոր գիծ (հինը մնում է)։ Նոր
+          Save-ը միավորում է գծերը։ Ամբողջությամբ փոխելու համար՝ «Խմբագրել» կամ
+          «Նոր polygon»։
         </p>
       </div>
     );

@@ -54,6 +54,18 @@ export function normalizedPointsToSvgPath(
   return commands.join(" ");
 }
 
+/** Append a new path segment without removing previous subpaths. */
+export function appendSvgPaths(
+  existingPath: string | null | undefined,
+  nextSegment: string,
+): string {
+  const next = nextSegment.trim();
+  if (!next) return existingPath?.trim() ?? "";
+  const existing = existingPath?.trim() ?? "";
+  if (!existing) return next;
+  return `${existing} ${next}`;
+}
+
 /** Parse simple M/L ... Z path into normalized points. */
 export function svgPathToNormalizedPoints(
   path: string,
@@ -65,8 +77,8 @@ export function svgPathToNormalizedPoints(
   const points: Array<{ x: number; y: number }> = [];
   for (let i = 0; i + 1 < nums.length; i += 2) {
     points.push({
-      x: clampNormalized(nums[i] / viewBoxWidth),
-      y: clampNormalized(nums[i + 1] / viewBoxHeight),
+      x: clampNormalized(nums[i]! / viewBoxWidth),
+      y: clampNormalized(nums[i + 1]! / viewBoxHeight),
     });
   }
   return points;
