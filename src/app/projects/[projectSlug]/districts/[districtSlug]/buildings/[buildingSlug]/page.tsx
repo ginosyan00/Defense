@@ -2,9 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BuildingRenderViewer } from "@/components/building/BuildingRenderViewer";
-import { Building3DViewerLazy } from "@/components/building-3d/Building3DViewerLazy";
 import { PageHero } from "@/components/site/PageHero";
-import { getBuilding3DPayload } from "@/lib/building/get-building-3d";
 import { getBuildingRenderPayload } from "@/lib/building/get-building-render";
 import { prisma } from "@/lib/db";
 
@@ -55,12 +53,12 @@ export default async function BuildingPage({ params }: BuildingPageProps) {
 
   if (!building) notFound();
 
-  const [payload3d, renderPayload] = await Promise.all([
-    getBuilding3DPayload(projectSlug, districtSlug, buildingSlug),
-    getBuildingRenderPayload(projectSlug, districtSlug, buildingSlug),
-  ]);
+  const renderPayload = await getBuildingRenderPayload(
+    projectSlug,
+    districtSlug,
+    buildingSlug,
+  );
 
-  const hasFloors = building.floors.length > 0;
   const projectHref = "/";
   const districtHref = `/projects/${projectSlug}/districts/${districtSlug}`;
   const buildingHref = `${districtHref}/buildings/${buildingSlug}`;
@@ -97,21 +95,6 @@ export default async function BuildingPage({ params }: BuildingPageProps) {
         }}
         guidance="Փուլ 3 · Hover հարկի գոտու վրա → նարնջագույն · Click → հատակագիծ / բնակարաններ։"
       />
-
-      {payload3d && hasFloors ? (
-        <section className="mx-auto max-w-[1600px] px-4 py-8 md:px-8">
-          <h2 className="mb-2 font-[family-name:var(--font-display)] text-2xl">
-            3D շենք
-          </h2>
-          <p className="mb-4 text-sm text-[var(--mp-ink-muted)]">
-            {payload3d.building.model3dUrl
-              ? "GLB model · հարկերն ընտրելի են hover/click-ով։"
-              : "Procedural 3D preview · GLB դեռ չկա, հարկերն ընտրելի են։"}{" "}
-            WebGL չլինելու դեպքում օգտագործեք աջ կողմի ցանկը։
-          </p>
-          <Building3DViewerLazy payload={payload3d} />
-        </section>
-      ) : null}
 
       <section className="mx-auto max-w-[1600px] px-4 py-8 md:px-8">
         <h2 className="mb-2 font-[family-name:var(--font-display)] text-2xl">
