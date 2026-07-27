@@ -3,16 +3,14 @@ import { InteractiveMasterplan } from "@/components/masterplan/InteractiveMaster
 import { MasterplanDistrictList } from "@/components/masterplan/MasterplanDistrictList";
 import { PageHero } from "@/components/site/PageHero";
 import { getProjectMasterplan } from "@/lib/masterplan/get-project-masterplan";
-import {
-  getPrimaryPublicProject,
-  masterplanPath,
-} from "@/lib/site/get-primary-public-project";
 import { JOURNEY_STEPS } from "@/lib/site/journey";
 
-export default async function HomePage() {
-  const primary = await getPrimaryPublicProject();
+const HOME_PROJECT_SLUG = "north-yard";
 
-  if (!primary) {
+export default async function HomePage() {
+  const payload = await getProjectMasterplan(HOME_PROJECT_SLUG);
+
+  if (!payload) {
     return (
       <main className="mx-auto max-w-[1600px] px-4 py-20 md:px-8">
         <h1 className="font-[family-name:var(--font-display)] text-4xl">
@@ -31,21 +29,7 @@ export default async function HomePage() {
     );
   }
 
-  const payload = await getProjectMasterplan(primary.slug);
-  if (!payload) {
-    return (
-      <main className="mx-auto max-w-[1600px] px-4 py-20 md:px-8">
-        <h1 className="font-[family-name:var(--font-display)] text-4xl">
-          {primary.name}
-        </h1>
-        <p className="mt-3 text-[var(--mp-ink-muted)]">
-          Masterplan տվյալները հասանելի չեն։
-        </p>
-      </main>
-    );
-  }
-
-  const projectHref = masterplanPath(primary.slug);
+  const projectHref = `/projects/${payload.project.slug}`;
 
   return (
     <main className="min-h-full bg-[var(--mp-canvas)] text-[var(--mp-ink)]">
@@ -59,6 +43,7 @@ export default async function HomePage() {
       />
 
       <section className="mx-auto max-w-[1600px] px-0 md:px-8 md:pt-6">
+        <link rel="preload" as="image" href={payload.asset.imageUrl} />
         <InteractiveMasterplan payload={payload} />
       </section>
 

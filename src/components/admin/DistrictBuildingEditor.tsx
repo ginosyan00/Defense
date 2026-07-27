@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   MappingCanvas,
   type MappingCanvasHandle,
   type MappingEntity,
 } from "@/components/admin/MappingCanvas";
 import { saveBuildingMapping } from "@/lib/admin/mapping-actions";
+import { deleteBuilding } from "@/lib/admin/project-actions";
 
 type BuildingEditorItem = MappingEntity & {
   interactionType: "MARKER" | "POLYGON" | "MARKER_AND_POLYGON";
@@ -33,6 +35,7 @@ export function DistrictBuildingEditor({
   viewBoxHeight,
   initialBuildings,
 }: DistrictBuildingEditorProps) {
+  const router = useRouter();
   const canvasRef = useRef<MappingCanvasHandle>(null);
   const [buildings, setBuildings] = useState(initialBuildings);
   const buildingsRef = useRef(buildings);
@@ -54,6 +57,11 @@ export function DistrictBuildingEditor({
 
   const persistBuilding = useCallback(
     async (item: BuildingEditorItem, note: string) => {
+      const label = item.label.trim();
+      if (!label) {
+        setMessage("Label-ը չի կարող դատարկ լինել։");
+        return;
+      }
       setPending(true);
       setMessage("Պահպանվում է…");
       try {
@@ -61,7 +69,7 @@ export function DistrictBuildingEditor({
           buildingId: item.id,
           markerX: item.markerX,
           markerY: item.markerY,
-          markerLabel: item.label,
+          markerLabel: label,
           svgPath: item.svgPath,
           interactionType: item.interactionType,
           projectSlug,
@@ -80,7 +88,7 @@ export function DistrictBuildingEditor({
             return next;
           });
           setMessage(
-            item.svgPath
+            item.svgPath || note.includes("նշիչ") || note.includes("Պահպանված")
               ? note
               : "✓ Մարկերը պահպանված է (գծագիր չկա — Polygon-ով գծիր ու ✓ սեղմիր)",
           );
@@ -168,13 +176,74 @@ export function DistrictBuildingEditor({
         );
         return;
       }
-      // flush → onPolygonClosed → persistBuilding
       return;
     }
 
     const latest =
       buildingsRef.current.find((item) => item.id === selected.id) ?? selected;
     await persistBuilding(latest, "✓ Պահպանված է");
+  };
+
+  const onClearMarker = async () => {
+    if (!selected) return;
+    if (
+      !window.confirm(
+        "Հանե՞լ նշիչը map-ից։ Շենքը կմնա ցանկում, կարող ես նորից տեղադրել Marker գործիքով։",
+      )
+    ) {
+      return;
+    }
+    const latest =
+      buildingsRef.current.find((item) => item.id === selected.id) ?? selected;
+    const next: BuildingEditorItem = {
+      ...latest,
+      markerX: null,
+      markerY: null,
+    };
+    setBuildings((prev) =>
+      prev.map((item) => (item.id === selected.id ? next : item)),
+    );
+    buildingsRef.current = buildingsRef.current.map((item) =>
+      item.id === selected.id ? next : item,
+    );
+    await persistBuilding(next, "✓ Նշիչը հանված է");
+  };
+
+  const onDeleteBuilding = async () => {
+    if (!selected) return;
+    if (
+      !window.confirm(
+        `Ջնջե՞լ «${selected.title}» շենքը։ Կջնջվեն նաև հարկերն ու բնակարանները։`,
+      )
+    ) {
+      return;
+    }
+    setPending(true);
+    setMessage("Ջնջվում է…");
+    try {
+      const result = await deleteBuilding({
+        buildingId: selected.id,
+        projectSlug,
+        districtSlug,
+      });
+      if (!result.ok) {
+        setMessage(result.error);
+        return;
+      }
+      const remaining = buildings.filter((item) => item.id !== selected.id);
+      setBuildings(remaining);
+      buildingsRef.current = remaining;
+      setSelectedId(remaining[0]?.id ?? null);
+      setDirtyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(selected.id);
+        return next;
+      });
+      setMessage("✓ Շենքը ջնջված է");
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -206,21 +275,27 @@ export function DistrictBuildingEditor({
         {selected ? (
           <div className="space-y-2 border border-[var(--mp-line)] p-3 text-sm">
             <label className="block">
-              Label
+              Marker տառ / label
               <input
                 className="mt-1 w-full border border-[var(--mp-line)] bg-transparent px-2 py-1"
                 value={selected.label}
-                onChange={(event) =>
-                  setBuildings((prev) =>
-                    prev.map((item) =>
-                      item.id === selected.id
-                        ? { ...item, label: event.target.value }
-                        : item,
-                    ),
-                  )
-                }
+                maxLength={8}
+                onChange={(event) => {
+                  const label = event.target.value;
+                  setBuildings((prev) => {
+                    const next = prev.map((item) =>
+                      item.id === selected.id ? { ...item, label } : item,
+                    );
+                    buildingsRef.current = next;
+                    return next;
+                  });
+                  setDirtyIds((prev) => new Set(prev).add(selected.id));
+                }}
               />
             </label>
+            <p className="text-[11px] text-[var(--mp-ink-muted)]">
+              Փոխիր տառը/թիվը և սեղմիր Պահպանել։
+            </p>
             <label className="block">
               Interaction
               <select
@@ -254,6 +329,20 @@ export function DistrictBuildingEditor({
             >
               {pending ? "Պահպանում…" : "Պահպանել"}
             </button>
+            {selected.markerX != null && selected.markerY != null ? (
+              <button
+                type="button"
+                className="w-full border border-[var(--mp-line)] px-3 py-2 text-xs uppercase tracking-[0.14em] disabled:opacity-50"
+                onClick={() => void onClearMarker()}
+                disabled={pending}
+              >
+                Հանել նշիչը
+              </button>
+            ) : (
+              <p className="text-[11px] text-[var(--mp-ink-muted)]">
+                Նշիչ չկա · Marker գործիքով տեղադրիր map-ի վրա։
+              </p>
+            )}
             {selected.svgPath ? (
               <button
                 type="button"
@@ -273,6 +362,14 @@ export function DistrictBuildingEditor({
                 Ջնջել polygon
               </button>
             ) : null}
+            <button
+              type="button"
+              className="w-full border border-red-700/40 px-3 py-2 text-xs uppercase tracking-[0.14em] text-red-800 disabled:opacity-50"
+              onClick={() => void onDeleteBuilding()}
+              disabled={pending}
+            >
+              Ջնջել շենքը
+            </button>
             {message ? (
               <p className="text-xs text-[var(--mp-ink-muted)]">{message}</p>
             ) : null}

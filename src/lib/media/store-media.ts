@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { warmMediaCache } from "@/lib/media/get-stored-media";
 
 export async function storeMediaFile(file: File): Promise<{
   id: string;
@@ -14,6 +15,12 @@ export async function storeMediaFile(file: File): Promise<{
       byteSize: buffer.byteLength,
       data: buffer,
     },
+  });
+
+  await warmMediaCache(row.id, {
+    data: buffer,
+    mimeType: row.mimeType,
+    byteSize: row.byteSize,
   });
 
   return {

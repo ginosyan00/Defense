@@ -47,9 +47,10 @@ async function loadProject(projectSlug: string) {
         include: {
           buildings: {
             where: { status: { not: "HIDDEN" } },
-            include: {
+            select: {
+              id: true,
               floors: {
-                include: {
+                select: {
                   apartments: {
                     where: { status: "AVAILABLE" },
                     select: { id: true, price: true, currency: true },

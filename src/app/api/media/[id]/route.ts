@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { getStoredMedia } from "@/lib/media/get-stored-media";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -10,11 +10,7 @@ export async function GET(_request: Request, context: RouteContext) {
     return new Response("Not found", { status: 404 });
   }
 
-  const media = await prisma.storedMedia.findUnique({
-    where: { id },
-    select: { data: true, mimeType: true, byteSize: true },
-  });
-
+  const media = await getStoredMedia(id);
   if (!media) {
     return new Response("Not found", { status: 404 });
   }

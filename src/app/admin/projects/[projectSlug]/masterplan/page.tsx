@@ -66,8 +66,8 @@ export default async function AdminMasterplanPage({ params }: PageProps) {
           id: district.id,
           label: district.markerLabel ?? district.name.slice(0, 1),
           title: district.name,
-          markerX: district.markerX ?? 0.5,
-          markerY: district.markerY ?? 0.5,
+          markerX: district.markerX,
+          markerY: district.markerY,
           svgPath: district.svgPath,
           interactionType: district.interactionType,
         }))}

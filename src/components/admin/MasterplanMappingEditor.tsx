@@ -8,6 +8,7 @@ import {
   type MappingEntity,
 } from "@/components/admin/MappingCanvas";
 import { saveDistrictMapping } from "@/lib/admin/mapping-actions";
+import { deleteDistrict } from "@/lib/admin/project-actions";
 
 type DistrictEditorItem = MappingEntity & {
   interactionType: "MARKER" | "POLYGON" | "MARKER_AND_POLYGON";
@@ -22,6 +23,11 @@ type MasterplanMappingEditorProps = {
   viewBoxHeight: number;
   initialDistricts: DistrictEditorItem[];
 };
+
+function formatMarkerPercent(value: number | null): string {
+  if (value == null) return "—";
+  return `${Math.round(value * 100)}%`;
+}
 
 export function MasterplanMappingEditor({
   projectSlug,
@@ -49,6 +55,11 @@ export function MasterplanMappingEditor({
 
   const persistDistrict = useCallback(
     async (item: DistrictEditorItem, note: string) => {
+      const label = item.label.trim();
+      if (!label) {
+        setMessage("Label-ը չի կարող դատարկ լինել։");
+        return;
+      }
       setPending(true);
       setMessage("Պահպանվում է…");
       try {
@@ -56,7 +67,7 @@ export function MasterplanMappingEditor({
           districtId: item.id,
           markerX: item.markerX,
           markerY: item.markerY,
-          markerLabel: item.label,
+          markerLabel: label,
           svgPath: item.svgPath,
           interactionType: item.interactionType,
           projectSlug,
@@ -155,6 +166,61 @@ export function MasterplanMappingEditor({
     await persistDistrict(selected, "✓ Պահպանված է");
   };
 
+  const onClearMarker = async () => {
+    if (!selected) return;
+    if (
+      !window.confirm(
+        "Հանե՞լ նշիչը map-ից։ Թաղամասը կմնա ցանկում, կարող ես նորից տեղադրել Marker գործիքով։",
+      )
+    ) {
+      return;
+    }
+    const next: DistrictEditorItem = {
+      ...selected,
+      markerX: null,
+      markerY: null,
+    };
+    setDistricts((prev) =>
+      prev.map((item) => (item.id === selected.id ? next : item)),
+    );
+    await persistDistrict(next, "✓ Նշիչը հանված է");
+  };
+
+  const onDeleteDistrict = async () => {
+    if (!selected) return;
+    if (
+      !window.confirm(
+        `Ջնջե՞լ «${selected.title}» թաղամասը։ Կջնջվեն նաև իր շենքերը, հարկերն ու բնակարանները։`,
+      )
+    ) {
+      return;
+    }
+    setPending(true);
+    setMessage("Ջնջվում է…");
+    try {
+      const result = await deleteDistrict({
+        districtId: selected.id,
+        projectSlug,
+      });
+      if (!result.ok) {
+        setMessage(result.error);
+        return;
+      }
+      const remaining = districts.filter((item) => item.id !== selected.id);
+      setDistricts(remaining);
+      setSelectedId(remaining[0]?.id ?? null);
+      setDirtyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(selected.id);
+        return next;
+      });
+      setMessage("✓ Թաղամասը ջնջված է");
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
+  };
+
   return (
     <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
       <aside className="space-y-3">
@@ -176,8 +242,8 @@ export function MasterplanMappingEditor({
                   {dirtyIds.has(district.id) ? " · *" : ""}
                 </span>
                 <span className="text-[10px] text-[var(--mp-ink-muted)]">
-                  {Math.round(district.markerX * 100)}%,
-                  {Math.round(district.markerY * 100)}%
+                  {formatMarkerPercent(district.markerX)},
+                  {formatMarkerPercent(district.markerY)}
                 </span>
               </button>
             </li>
@@ -187,21 +253,25 @@ export function MasterplanMappingEditor({
         {selected ? (
           <div className="space-y-2 border border-[var(--mp-line)] p-3 text-sm">
             <label className="block">
-              Label
+              Marker տառ / label
               <input
                 className="mt-1 w-full border border-[var(--mp-line)] bg-transparent px-2 py-1"
                 value={selected.label}
-                onChange={(event) =>
+                maxLength={8}
+                onChange={(event) => {
+                  const label = event.target.value;
                   setDistricts((prev) =>
                     prev.map((item) =>
-                      item.id === selected.id
-                        ? { ...item, label: event.target.value }
-                        : item,
+                      item.id === selected.id ? { ...item, label } : item,
                     ),
-                  )
-                }
+                  );
+                  setDirtyIds((prev) => new Set(prev).add(selected.id));
+                }}
               />
             </label>
+            <p className="text-[11px] text-[var(--mp-ink-muted)]">
+              Փոխիր տառը (օր. A → B) և սեղմիր Պահպանել։
+            </p>
             <label className="block">
               Interaction
               <select
@@ -235,6 +305,20 @@ export function MasterplanMappingEditor({
             >
               {pending ? "Պահպանում…" : "Պահպանել"}
             </button>
+            {selected.markerX != null && selected.markerY != null ? (
+              <button
+                type="button"
+                className="w-full border border-[var(--mp-line)] px-3 py-2 text-xs uppercase tracking-[0.14em] disabled:opacity-50"
+                onClick={() => void onClearMarker()}
+                disabled={pending}
+              >
+                Հանել նշիչը
+              </button>
+            ) : (
+              <p className="text-[11px] text-[var(--mp-ink-muted)]">
+                Նշիչ չկա · Marker գործիքով տեղադրիր map-ի վրա։
+              </p>
+            )}
             {selected.svgPath ? (
               <button
                 type="button"
@@ -254,6 +338,14 @@ export function MasterplanMappingEditor({
                 Ջնջել polygon
               </button>
             ) : null}
+            <button
+              type="button"
+              className="w-full border border-red-700/40 px-3 py-2 text-xs uppercase tracking-[0.14em] text-red-800 disabled:opacity-50"
+              onClick={() => void onDeleteDistrict()}
+              disabled={pending}
+            >
+              Ջնջել թաղամասը
+            </button>
             {message ? (
               <p className="text-xs text-[var(--mp-ink-muted)]">{message}</p>
             ) : null}

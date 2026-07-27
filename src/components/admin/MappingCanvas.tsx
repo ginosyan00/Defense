@@ -45,8 +45,8 @@ export type MappingEntity = {
   id: string;
   label: string;
   title: string;
-  markerX: number;
-  markerY: number;
+  markerX: number | null;
+  markerY: number | null;
   svgPath: string | null;
 };
 
@@ -432,8 +432,14 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
         );
         onChangeEntity(entityId, {
           svgPath,
-          markerX: clampNormalized(entity.markerX + dx),
-          markerY: clampNormalized(entity.markerY + dy),
+          markerX:
+            entity.markerX == null
+              ? null
+              : clampNormalized(entity.markerX + dx),
+          markerY:
+            entity.markerY == null
+              ? null
+              : clampNormalized(entity.markerY + dy),
         });
       },
       [onChangeEntity, updateDraftPoints, viewBoxHeight, viewBoxWidth],
@@ -986,6 +992,9 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
             ) : null}
 
             {entities.map((entity) => {
+              if (entity.markerX == null || entity.markerY == null) {
+                return null;
+              }
               if (mode === "edit-polygon" && entity.id !== selectedId) {
                 return null;
               }

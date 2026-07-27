@@ -7,10 +7,12 @@ import { formatMarkerLabel } from "@/lib/format-marker-label";
 
 const normalized = z.number().min(0).max(1);
 
+const optionalNormalized = normalized.nullable();
+
 const districtMappingSchema = z.object({
   districtId: z.string().min(1),
-  markerX: normalized,
-  markerY: normalized,
+  markerX: optionalNormalized,
+  markerY: optionalNormalized,
   markerLabel: z.string().min(1).max(8),
   svgPath: z.string().nullable(),
   interactionType: z.enum(["MARKER", "POLYGON", "MARKER_AND_POLYGON"]),
@@ -19,8 +21,8 @@ const districtMappingSchema = z.object({
 
 const buildingMappingSchema = z.object({
   buildingId: z.string().min(1),
-  markerX: normalized,
-  markerY: normalized,
+  markerX: optionalNormalized,
+  markerY: optionalNormalized,
   markerLabel: z.string().min(1).max(8),
   svgPath: z.string().nullable(),
   interactionType: z.enum(["MARKER", "POLYGON", "MARKER_AND_POLYGON"]),
@@ -67,19 +69,24 @@ export async function saveDistrictMapping(
   const parsed = districtMappingSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid mapping payload" };
 
-  await prisma.district.update({
-    where: { id: parsed.data.districtId },
-    data: {
-      markerX: parsed.data.markerX,
-      markerY: parsed.data.markerY,
-      markerLabel: formatMarkerLabel(parsed.data.markerLabel),
-      svgPath: parsed.data.svgPath,
-      interactionType: parsed.data.interactionType,
-    },
-  });
+  try {
+    await prisma.district.update({
+      where: { id: parsed.data.districtId },
+      data: {
+        markerX: parsed.data.markerX,
+        markerY: parsed.data.markerY,
+        markerLabel: formatMarkerLabel(parsed.data.markerLabel),
+        svgPath: parsed.data.svgPath,
+        interactionType: parsed.data.interactionType,
+      },
+    });
+  } catch {
+    return { ok: false, error: "Թաղամասը չի գտնվել կամ արդեն ջնջված է։" };
+  }
 
   revalidatePath(`/projects/${parsed.data.projectSlug}`);
   revalidatePath(`/admin/projects/${parsed.data.projectSlug}/masterplan`);
+  revalidatePath("/");
   return { ok: true };
 }
 

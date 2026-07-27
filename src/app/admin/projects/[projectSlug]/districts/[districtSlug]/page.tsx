@@ -79,8 +79,8 @@ export default async function AdminDistrictEditorPage({ params }: PageProps) {
             building.markerLabel ?? building.buildingNumber,
           ),
           title: building.name,
-          markerX: building.markerX ?? 0.5,
-          markerY: building.markerY ?? 0.5,
+          markerX: building.markerX,
+          markerY: building.markerY,
           svgPath: building.svgPath,
           interactionType: building.interactionType,
         }))}

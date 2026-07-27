@@ -216,6 +216,74 @@ export async function createBuilding(input: {
   };
 }
 
+export async function deleteDistrict(input: {
+  districtId: string;
+  projectSlug: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = z
+    .object({
+      districtId: z.string().min(1),
+      projectSlug: z.string().min(1),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid district delete" };
+
+  const district = await prisma.district.findFirst({
+    where: {
+      id: parsed.data.districtId,
+      project: { slug: parsed.data.projectSlug },
+    },
+    select: { id: true },
+  });
+  if (!district) return { ok: false, error: "Թաղամասը չի գտնվել։" };
+
+  await prisma.district.delete({ where: { id: district.id } });
+
+  revalidatePath(`/admin/projects/${parsed.data.projectSlug}`);
+  revalidatePath(`/admin/projects/${parsed.data.projectSlug}/masterplan`);
+  revalidatePath(`/projects/${parsed.data.projectSlug}`);
+  revalidatePath("/");
+  return { ok: true };
+}
+
+export async function deleteBuilding(input: {
+  buildingId: string;
+  projectSlug: string;
+  districtSlug: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = z
+    .object({
+      buildingId: z.string().min(1),
+      projectSlug: z.string().min(1),
+      districtSlug: z.string().min(1),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid building delete" };
+
+  const building = await prisma.building.findFirst({
+    where: {
+      id: parsed.data.buildingId,
+      district: {
+        slug: parsed.data.districtSlug,
+        project: { slug: parsed.data.projectSlug },
+      },
+    },
+    select: { id: true },
+  });
+  if (!building) return { ok: false, error: "Շենքը չի գտնվել։" };
+
+  await prisma.building.delete({ where: { id: building.id } });
+
+  revalidatePath(`/admin/projects/${parsed.data.projectSlug}`);
+  revalidatePath(
+    `/admin/projects/${parsed.data.projectSlug}/districts/${parsed.data.districtSlug}`,
+  );
+  revalidatePath(
+    `/projects/${parsed.data.projectSlug}/districts/${parsed.data.districtSlug}`,
+  );
+  return { ok: true };
+}
+
 export async function createFloor(input: {
   projectSlug: string;
   districtSlug: string;

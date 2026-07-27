@@ -58,6 +58,8 @@ export function MasterplanImage({
         width={width}
         height={height}
         draggable={false}
+        fetchPriority="high"
+        decoding="async"
         className={`h-full w-full select-none object-fill ${status === "ready" ? "opacity-100" : "opacity-0"} ${className ?? ""}`}
         onLoad={() => setStatus("ready")}
         onError={() => setStatus("error")}
