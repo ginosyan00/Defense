@@ -41,7 +41,8 @@ export default async function AdminProjectPage({ params }: PageProps) {
   const districtsDone = project.districts.filter(
     (d) => d.markerX != null && d.markerY != null,
   ).length;
-  const phase1Done = districtsTotal > 0 && districtsDone >= districtsTotal;
+  /** Unlock phase 2 after at least one district is mapped — others can wait. */
+  const phase1Done = districtsDone >= 1;
 
   const allBuildings = project.districts.flatMap((d) =>
     d.buildings.map((b) => ({
@@ -56,10 +57,15 @@ export default async function AdminProjectPage({ params }: PageProps) {
   const phase2Done =
     allBuildings.length > 0 && buildingsDone >= allBuildings.length;
 
+  const mappedDistricts = project.districts.filter(
+    (d) => d.markerX != null && d.markerY != null,
+  );
   const unfinishedDistrict =
-    project.districts.find((d) =>
+    mappedDistricts.find((d) =>
       d.buildings.some((b) => b.markerX == null || b.markerY == null),
-    ) ?? project.districts[0];
+    ) ??
+    mappedDistricts[0] ??
+    project.districts[0];
 
   const unfinishedBuilding =
     allBuildings.find(
@@ -203,7 +209,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
         <AdminPhaseCard
           step={1}
           title="Թաղամասեր"
-          hint="Նախ upload արա masterplan նկարը, ստեղծիր թաղամաս, հետո դրիր marker/polygon։"
+          hint="Գոնե 1 թաղամաս map արա (marker)՝ հետո կարող ես անցնել շենքերին։ Մնացած թաղամասերը հետո էլ կարելի է։"
           state={activeStep === 1 ? "active" : phase1Done ? "done" : "locked"}
           progressLabel={`${districtsDone}/${districtsTotal || 0} mapped`}
           addHref={districtsTotal > 0 ? phase1Href : undefined}
