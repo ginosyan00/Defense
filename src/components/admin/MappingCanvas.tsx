@@ -17,6 +17,15 @@ import {
 } from "@/lib/admin/mapping-math";
 import { getContainedImageBounds } from "@/lib/coordinates";
 import { formatMarkerLabel } from "@/lib/format-marker-label";
+import {
+  ClearPointsIcon,
+  MarkerPinIcon,
+  PolygonShapeIcon,
+  SaveCheckIcon,
+  SelectCursorIcon,
+  TrashPointIcon,
+  UndoPointIcon,
+} from "@/components/admin/MappingToolbarIcons";
 
 export type MappingEntity = {
   id: string;
@@ -74,13 +83,20 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
     const [draftPoints, setDraftPoints] = useState<
       Array<{ x: number; y: number }>
     >([]);
+    const [selectedDraftIndex, setSelectedDraftIndex] = useState<number | null>(
+      null,
+    );
     const [bounds, setBounds] = useState({ x: 0, y: 0, width: 0, height: 0 });
     const dragRef = useRef<{ id: string } | null>(null);
     const draftRef = useRef(draftPoints);
+    const selectedDraftIndexRef = useRef(selectedDraftIndex);
     const selectedIdRef = useRef(selectedId);
     useEffect(() => {
       draftRef.current = draftPoints;
     }, [draftPoints]);
+    useEffect(() => {
+      selectedDraftIndexRef.current = selectedDraftIndex;
+    }, [selectedDraftIndex]);
     useEffect(() => {
       selectedIdRef.current = selectedId;
     }, [selectedId]);
@@ -134,7 +150,8 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
         onChangeEntity(entityId, { svgPath });
         onPolygonClosed?.(entityId, svgPath);
         setDraftPoints([]);
-        setMode("select");
+        setSelectedDraftIndex(null);
+        setMode("draw-polygon");
         return true;
       },
       [onChangeEntity, onPolygonClosed, viewBoxHeight, viewBoxWidth],
@@ -145,6 +162,31 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
       if (!entityId) return;
       commitDraft(draftRef.current, entityId);
     }, [commitDraft]);
+
+    const clearDraft = useCallback(() => {
+      setDraftPoints([]);
+      setSelectedDraftIndex(null);
+    }, []);
+
+    const deleteSelectedDraftPoint = useCallback(() => {
+      const index = selectedDraftIndexRef.current;
+      if (index == null) return;
+      setDraftPoints((prev) => prev.filter((_, i) => i !== index));
+      setSelectedDraftIndex(null);
+    }, []);
+
+    const undoLastDraftPoint = useCallback(() => {
+      setDraftPoints((prev) => {
+        if (prev.length === 0) return prev;
+        const next = prev.slice(0, -1);
+        setSelectedDraftIndex((current) => {
+          if (current == null) return null;
+          if (current >= next.length) return null;
+          return current;
+        });
+        return next;
+      });
+    }, []);
 
     /** Commit (≥3) or ask before discarding incomplete draft. Returns false if cancelled. */
     const resolveOpenDraft = useCallback(() => {
@@ -162,9 +204,9 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
       ) {
         return false;
       }
-      setDraftPoints([]);
+      clearDraft();
       return true;
-    }, [commitDraft]);
+    }, [clearDraft, commitDraft]);
 
     const changeMode = useCallback(
       (next: EditorMode) => {
@@ -190,18 +232,62 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
 
     useEffect(() => {
       const onKeyDown = (event: KeyboardEvent) => {
+        const target = event.target;
+        if (
+          target instanceof HTMLElement &&
+          (target.tagName === "INPUT" ||
+            target.tagName === "TEXTAREA" ||
+            target.tagName === "SELECT" ||
+            target.isContentEditable)
+        ) {
+          return;
+        }
+
         if (event.key === "Enter" && draftRef.current.length >= 3) {
           event.preventDefault();
           closePolygon();
+          return;
         }
+
+        if (
+          (event.key === "Delete" || event.key === "Backspace") &&
+          selectedDraftIndexRef.current != null
+        ) {
+          event.preventDefault();
+          deleteSelectedDraftPoint();
+          return;
+        }
+
+        const isUndoKey =
+          (event.key === "z" || event.key === "Z") &&
+          (event.ctrlKey || event.metaKey) &&
+          !event.shiftKey;
+        if (
+          (isUndoKey || event.key === "Backspace") &&
+          draftRef.current.length > 0
+        ) {
+          event.preventDefault();
+          undoLastDraftPoint();
+          return;
+        }
+
         if (event.key === "Escape") {
-          setDraftPoints([]);
+          if (selectedDraftIndexRef.current != null) {
+            setSelectedDraftIndex(null);
+            return;
+          }
+          clearDraft();
           setMode("select");
         }
       };
       window.addEventListener("keydown", onKeyDown);
       return () => window.removeEventListener("keydown", onKeyDown);
-    }, [closePolygon]);
+    }, [
+      clearDraft,
+      closePolygon,
+      deleteSelectedDraftPoint,
+      undoLastDraftPoint,
+    ]);
 
     const onCanvasClick = (event: ReactMouseEvent<HTMLDivElement>) => {
       if (dragRef.current) return;
@@ -214,6 +300,7 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
       }
 
       if (mode === "draw-polygon") {
+        setSelectedDraftIndex(null);
         setDraftPoints((prev) => [...prev, point]);
       }
     };
@@ -229,7 +316,7 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
       }
       onChangeEntity(selectedId, { svgPath: null });
       onPolygonDeleted?.(selectedId);
-      setDraftPoints([]);
+      clearDraft();
       setMode("select");
     };
 
@@ -246,7 +333,7 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
         onChangeEntity(selectedId, { svgPath: null });
         onPolygonDeleted?.(selectedId);
       }
-      setDraftPoints([]);
+      clearDraft();
       setMode("draw-polygon");
     };
 
@@ -285,22 +372,25 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
         >
           {(
             [
-              ["select", "Ընտրել"],
-              ["place-marker", "Marker"],
-              ["draw-polygon", "Polygon"],
+              ["select", "Ընտրել", SelectCursorIcon],
+              ["place-marker", "Marker", MarkerPinIcon],
+              ["draw-polygon", "Polygon", PolygonShapeIcon],
             ] as const
-          ).map(([value, label]) => (
+          ).map(([value, label, Icon]) => (
             <button
               key={value}
               type="button"
-              className={`border px-3 py-1.5 text-xs uppercase tracking-[0.14em] ${
+              title={label}
+              aria-label={label}
+              className={`inline-flex items-center gap-1.5 border px-2.5 py-1.5 text-xs uppercase tracking-[0.14em] ${
                 mode === value
                   ? "border-[var(--mp-ink)] bg-[var(--mp-ink)] text-[var(--mp-panel)]"
                   : "border-[var(--mp-line)]"
               }`}
               onClick={() => changeMode(value)}
             >
-              {label}
+              <Icon />
+              <span className="hidden sm:inline">{label}</span>
             </button>
           ))}
           {selected?.svgPath ? (
@@ -312,6 +402,7 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
                   if (!selected.svgPath) return;
                   if (!resolveOpenDraft()) return;
                   setMode("draw-polygon");
+                  setSelectedDraftIndex(null);
                   setDraftPoints(
                     svgPathToNormalizedPoints(
                       selected.svgPath,
@@ -346,18 +437,43 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
             <>
               <button
                 type="button"
-                className="border border-[var(--mp-ink)] bg-[var(--mp-ink)] px-3 py-1.5 text-xs uppercase tracking-[0.14em] text-[var(--mp-panel)] disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 border border-[var(--mp-ink)] bg-[var(--mp-ink)] px-2.5 py-1.5 text-xs uppercase tracking-[0.14em] text-[var(--mp-panel)] disabled:opacity-40"
                 onClick={closePolygon}
                 disabled={draftPoints.length < 3}
+                title={`Պահպանել գծագիրը (${draftPoints.length} կետ)`}
+                aria-label={`Պահպանել գծագիրը, ${draftPoints.length} կետ`}
               >
-                Պահպանել գծագիրը ({draftPoints.length} կետ)
+                <SaveCheckIcon />
+                <span>{draftPoints.length}</span>
               </button>
               <button
                 type="button"
-                className="border border-[var(--mp-line)] px-3 py-1.5 text-xs uppercase tracking-[0.14em]"
-                onClick={() => setDraftPoints([])}
+                className="inline-flex items-center justify-center border border-red-700/40 px-2.5 py-1.5 text-red-800 disabled:opacity-40"
+                onClick={deleteSelectedDraftPoint}
+                disabled={selectedDraftIndex == null}
+                title="Ջնջել ընտրված կետը (Delete)"
+                aria-label="Ջնջել ընտրված կետը"
               >
-                Չեղարկել կետերը
+                <TrashPointIcon />
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center border border-[var(--mp-line)] px-2.5 py-1.5 disabled:opacity-40"
+                onClick={undoLastDraftPoint}
+                disabled={draftPoints.length === 0}
+                title="Հետ · վերջին կետ (Ctrl+Z)"
+                aria-label="Հետ վերջին կետ"
+              >
+                <UndoPointIcon />
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center border border-[var(--mp-line)] px-2.5 py-1.5"
+                onClick={clearDraft}
+                title="Չեղարկել բոլոր կետերը"
+                aria-label="Չեղարկել բոլոր կետերը"
+              >
+                <ClearPointsIcon />
               </button>
             </>
           ) : null}
@@ -433,16 +549,44 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
                   strokeDasharray="8 6"
                 />
               ) : null}
-              {draftPoints.map((point, index) => (
-                <circle
-                  key={`draft-pt-${index}`}
-                  cx={point.x * viewBoxWidth}
-                  cy={point.y * viewBoxHeight}
-                  r={6}
-                  fill="#c45c26"
-                />
-              ))}
             </svg>
+
+            {draftPoints.map((point, index) => (
+              <button
+                key={`draft-pt-${index}`}
+                type="button"
+                aria-label={`Կետ ${index + 1}${selectedDraftIndex === index ? ", ընտրված" : ""}`}
+                className="absolute z-20 h-5 w-5 -translate-x-1/2 -translate-y-1/2 opacity-0"
+                style={{
+                  left: `${point.x * 100}%`,
+                  top: `${point.y * 100}%`,
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setMode("draw-polygon");
+                  setSelectedDraftIndex((current) =>
+                    current === index ? null : index,
+                  );
+                }}
+              />
+            ))}
+
+            {draftPoints.length >= 3 ? (
+              <button
+                type="button"
+                className="absolute z-20 translate-x-3 -translate-y-1/2 border border-[var(--mp-ink)] bg-[var(--mp-ink)] px-3 py-2 text-xs uppercase tracking-[0.14em] text-[var(--mp-panel)] shadow-lg"
+                style={{
+                  left: `${draftPoints[draftPoints.length - 1]!.x * 100}%`,
+                  top: `${draftPoints[draftPoints.length - 1]!.y * 100}%`,
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  closePolygon();
+                }}
+              >
+                Պահպանել
+              </button>
+            ) : null}
 
             {entities.map((entity) => (
               <button
@@ -472,8 +616,9 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
         </div>
 
         <p className="text-xs text-[var(--mp-ink-muted)]">
-          Նարնջագույն գիծը draft է (չպահպանված)։ Լցված տարածքը՝ պահպանված
-          polygon։ Գծիր → «Պահպանել գծագիրը» / Enter։
+          Նարնջագույն գիծը draft է։ Կտտացրու կետին՝ ընտրելու համար, հետո
+          «Ջնջել կետը» կամ Delete։ Ctrl+Z՝ վերջին կետը հետ։ Պահպանիր գծագիրը
+          Enter-ով։
         </p>
       </div>
     );
