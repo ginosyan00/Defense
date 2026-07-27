@@ -16,6 +16,7 @@ import {
   svgPathToNormalizedPoints,
 } from "@/lib/admin/mapping-math";
 import { getContainedImageBounds } from "@/lib/coordinates";
+import { formatMarkerLabel } from "@/lib/format-marker-label";
 
 export type MappingEntity = {
   id: string;
@@ -447,10 +448,10 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
               <button
                 key={`marker-${entity.id}`}
                 type="button"
-                className={`absolute z-10 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border text-xs shadow ${
+                className={`absolute z-10 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white text-xs font-semibold tracking-wide text-white shadow-[0_3px_10px_rgba(0,0,0,0.35)] ${
                   entity.id === selectedId
-                    ? "border-[var(--mp-focus)] bg-[var(--mp-ink)] text-[var(--mp-panel)]"
-                    : "border-[var(--mp-marker-border)] bg-[var(--mp-marker)]"
+                    ? "bg-[#d56a20] ring-2 ring-white/80 ring-offset-1 ring-offset-transparent"
+                    : "bg-[#e07a2f]"
                 }`}
                 style={{
                   left: `${entity.markerX * 100}%`,
@@ -464,7 +465,7 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
                 onPointerMove={onMarkerPointerMove}
                 onPointerUp={onMarkerPointerUp}
               >
-                {entity.label}
+                {formatMarkerLabel(entity.label)}
               </button>
             ))}
           </div>

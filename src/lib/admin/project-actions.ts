@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { formatMarkerLabel } from "@/lib/format-marker-label";
 
 function slugify(name: string): string {
   const base = name
@@ -171,8 +172,9 @@ export async function createBuilding(input: {
 
   const sortOrder =
     (district.buildings.reduce((m, b) => Math.max(m, b.sortOrder), 0) || 0) + 1;
-  const buildingNumber =
-    parsed.data.buildingNumber || String(sortOrder).padStart(2, "0");
+  const rawNumber =
+    parsed.data.buildingNumber || String(sortOrder);
+  const buildingNumber = formatMarkerLabel(rawNumber);
   const baseSlug = slugify(parsed.data.name) || `b${sortOrder}`;
   let slug = baseSlug;
   let n = 2;

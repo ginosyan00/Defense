@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { DistrictBuildingEditor } from "@/components/admin/DistrictBuildingEditor";
 import { DistrictPlanImageUploader } from "@/components/admin/DistrictPlanImageUploader";
 import { getDistrictPlaceholderAsset } from "@/lib/district/placeholder-asset";
+import { formatMarkerLabel } from "@/lib/format-marker-label";
 import { prisma } from "@/lib/db";
 
 type PageProps = {
@@ -75,7 +76,9 @@ export default async function AdminDistrictEditorPage({ params }: PageProps) {
         viewBoxHeight={viewH}
         initialBuildings={district.buildings.map((building) => ({
           id: building.id,
-          label: building.markerLabel ?? building.buildingNumber,
+          label: formatMarkerLabel(
+            building.markerLabel ?? building.buildingNumber,
+          ),
           title: building.name,
           markerX: building.markerX ?? 0.5,
           markerY: building.markerY ?? 0.5,

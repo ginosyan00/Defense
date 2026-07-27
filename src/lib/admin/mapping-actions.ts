@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { formatMarkerLabel } from "@/lib/format-marker-label";
 
 const normalized = z.number().min(0).max(1);
 
@@ -71,7 +72,7 @@ export async function saveDistrictMapping(
     data: {
       markerX: parsed.data.markerX,
       markerY: parsed.data.markerY,
-      markerLabel: parsed.data.markerLabel,
+      markerLabel: formatMarkerLabel(parsed.data.markerLabel),
       svgPath: parsed.data.svgPath,
       interactionType: parsed.data.interactionType,
     },
@@ -98,7 +99,7 @@ export async function saveBuildingMapping(
     data: {
       markerX: parsed.data.markerX,
       markerY: parsed.data.markerY,
-      markerLabel: parsed.data.markerLabel,
+      markerLabel: formatMarkerLabel(parsed.data.markerLabel),
       svgPath: parsed.data.svgPath,
       interactionType: parsed.data.interactionType,
     },
@@ -166,7 +167,7 @@ export async function saveFloorImageMapping(
     data: {
       markerX: parsed.data.markerX,
       markerY: parsed.data.markerY,
-      markerLabel: parsed.data.markerLabel,
+      markerLabel: formatMarkerLabel(parsed.data.markerLabel),
       svgPath: parsed.data.svgPath,
       interactionType: parsed.data.interactionType,
     },
@@ -206,7 +207,7 @@ export async function saveApartmentImageMapping(
   const mapping = {
     markerX: parsed.data.markerX,
     markerY: parsed.data.markerY,
-    markerLabel: parsed.data.markerLabel,
+    markerLabel: formatMarkerLabel(parsed.data.markerLabel),
     svgPath: parsed.data.svgPath,
     interactionType: parsed.data.interactionType,
   };

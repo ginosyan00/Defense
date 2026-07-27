@@ -1,5 +1,6 @@
 import type { BuildingRenderFloor } from "@/components/building/BuildingRenderViewer";
 import { prisma } from "@/lib/db";
+import { formatMarkerLabel } from "@/lib/format-marker-label";
 import type { InteractionType } from "@prisma/client";
 
 const PLACEHOLDER_RENDER = "/buildings/building-render.png";
@@ -77,8 +78,9 @@ export async function getBuildingRenderPayload(
         id: floor.id,
         floorNumber: floor.floorNumber,
         name: floor.name,
-        label:
-          floor.markerLabel ?? String(floor.floorNumber).padStart(2, "0"),
+        label: formatMarkerLabel(
+          floor.markerLabel ?? String(floor.floorNumber),
+        ),
         availableApartmentCount: available.length,
         markerX: floor.markerX ?? 0.5,
         markerY: floor.markerY ?? 0.12 + index * band * 0.75 + band * 0.35,

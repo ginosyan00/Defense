@@ -2,6 +2,7 @@
 
 import type { SpatialHotspotBase } from "@/types/spatial";
 import { normalizedToPercent } from "@/lib/coordinates";
+import { formatMarkerLabel } from "@/lib/format-marker-label";
 import { isMutedSpatialStatus } from "@/lib/spatial-status";
 
 type MasterplanHotspotProps = {
@@ -53,15 +54,11 @@ export function MasterplanHotspot({
   const muted = isMutedSpatialStatus(hotspot.status);
   const scale =
     interactive && (isHovered || isSelected || isFocused) ? 1.12 : 1;
-  const markerClass = `absolute z-10 flex min-h-11 min-w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border text-sm font-medium tracking-wide shadow-[0_6px_18px_rgba(0,0,0,0.28)] ${
+  const markerClass = `absolute z-10 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white text-xs font-semibold tracking-wide text-white shadow-[0_3px_10px_rgba(0,0,0,0.35)] ${
     interactive ? "transition-transform duration-150" : ""
-  } ${
-    muted
-      ? "border-[var(--mp-marker-muted-border)] bg-[var(--mp-marker-muted)] text-[var(--mp-marker-muted-ink)]"
-      : "border-[var(--mp-marker-border)] bg-[var(--mp-marker)] text-[var(--mp-marker-ink)]"
-  } ${
+  } ${muted ? "bg-[#c47a45] opacity-85" : "bg-[#e07a2f]"} ${
     interactive && (isSelected || isFocused)
-      ? "ring-2 ring-[var(--mp-focus)] ring-offset-2 ring-offset-transparent"
+      ? "ring-2 ring-white/80 ring-offset-1 ring-offset-transparent"
       : ""
   }`;
   const markerStyle = {
@@ -78,7 +75,7 @@ export function MasterplanHotspot({
         style={markerStyle}
         aria-hidden
       >
-        <span>{hotspot.label}</span>
+        <span>{formatMarkerLabel(hotspot.label)}</span>
       </span>
     );
   }
@@ -98,7 +95,7 @@ export function MasterplanHotspot({
       onBlur={() => onFocus(null)}
       onClick={() => onSelect(hotspot.id)}
     >
-      <span aria-hidden>{hotspot.label}</span>
+      <span aria-hidden>{formatMarkerLabel(hotspot.label)}</span>
     </button>
   );
 }

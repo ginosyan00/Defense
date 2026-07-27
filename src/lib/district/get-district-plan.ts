@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getDistrictPlaceholderAsset } from "@/lib/district/placeholder-asset";
+import { formatMarkerLabel } from "@/lib/format-marker-label";
 import type {
   BuildingHotspotContract,
   BuildingVisualStatus,
@@ -143,7 +144,9 @@ export async function getDistrictPlan(
         entityType: "building",
         entityId: building.id,
         slug: building.slug,
-        label: building.markerLabel ?? building.buildingNumber,
+        label: formatMarkerLabel(
+          building.markerLabel ?? building.buildingNumber,
+        ),
         title: building.name,
         buildingNumber: building.buildingNumber,
         interactionType: mapInteractionType(building.interactionType),
