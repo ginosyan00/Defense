@@ -76,3 +76,20 @@ export function ClearPointsIcon({ size = 16 }: IconProps) {
     </svg>
   );
 }
+
+export function BandStripIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...iconProps(size)}>
+      <path d="M4 9h16v6H4z" />
+      <path d="M7 6h10M7 18h10" />
+    </svg>
+  );
+}
+
+export function AutoStackIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...iconProps(size)}>
+      <path d="M5 5h14v3H5zM5 10.5h14v3H5zM5 16h14v3H5z" />
+    </svg>
+  );
+}

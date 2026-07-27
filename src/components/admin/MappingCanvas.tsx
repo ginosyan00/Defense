@@ -12,13 +12,25 @@ import {
 } from "react";
 import {
   appendSvgPaths,
+  bandPolygonFromEdge,
   normalizedPointsToSvgPath,
+  offsetNormalizedPath,
+  pathCentroid,
   pointerToNormalized,
+  stackBandsFromQuad,
   svgPathToNormalizedPoints,
+  type NormPoint,
 } from "@/lib/admin/mapping-math";
-import { getContainedImageBounds } from "@/lib/coordinates";
+import {
+  polygonShapeToSvgPath,
+  svgPathToPolygonShape,
+  type PolygonShape,
+} from "@/lib/admin/curved-polygon";
+import { getContainedImageBounds, clampNormalized } from "@/lib/coordinates";
 import { formatMarkerLabel } from "@/lib/format-marker-label";
 import {
+  AutoStackIcon,
+  BandStripIcon,
   ClearPointsIcon,
   MarkerPinIcon,
   PolygonShapeIcon,
@@ -27,6 +39,7 @@ import {
   TrashPointIcon,
   UndoPointIcon,
 } from "@/components/admin/MappingToolbarIcons";
+import { PolygonEditHandles } from "@/components/admin/PolygonEditHandles";
 
 export type MappingEntity = {
   id: string;
@@ -37,6 +50,13 @@ export type MappingEntity = {
   svgPath: string | null;
 };
 
+export type MappingBulkPathUpdate = {
+  id: string;
+  svgPath: string;
+  markerX: number;
+  markerY: number;
+};
+
 export type MappingCanvasHandle = {
   /** Commits open draft (≥1 point). Returns saved svgPath, or null if nothing to save. */
   flushPolygonDraft: () => string | null;
@@ -44,7 +64,13 @@ export type MappingCanvasHandle = {
   getDraftPointCount: () => number;
 };
 
-type EditorMode = "select" | "place-marker" | "draw-polygon";
+type EditorMode =
+  | "select"
+  | "place-marker"
+  | "draw-polygon"
+  | "edit-polygon"
+  | "draw-band"
+  | "auto-stack";
 
 type MappingCanvasProps = {
   imageUrl: string;
@@ -57,10 +83,16 @@ type MappingCanvasProps = {
   onSelect: (id: string) => void;
   onChangeEntity: (
     id: string,
-    patch: Partial<Pick<MappingEntity, "markerX" | "markerY" | "svgPath">>,
+    patch: Partial<
+      Pick<MappingEntity, "markerX" | "markerY" | "svgPath">
+    >,
   ) => void;
   onPolygonClosed?: (id: string, svgPath: string) => void;
   onPolygonDeleted?: (id: string) => void;
+  /** Floors preset adds Band + Auto stack tools. */
+  toolPreset?: "basic" | "floors";
+  /** Auto-stack assigns paths to all entities (index 0 = bottom floor). */
+  onBulkPaths?: (updates: MappingBulkPathUpdate[]) => void;
 };
 
 export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>(
@@ -77,27 +109,39 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
       onChangeEntity,
       onPolygonClosed,
       onPolygonDeleted,
+      toolPreset = "basic",
+      onBulkPaths,
     },
     ref,
   ) {
     const viewportRef = useRef<HTMLDivElement>(null);
     const [mode, setMode] = useState<EditorMode>("select");
-    const [draftPoints, setDraftPoints] = useState<
-      Array<{ x: number; y: number }>
-    >([]);
+    const [draftPoints, setDraftPoints] = useState<NormPoint[]>([]);
+    const [editShape, setEditShape] = useState<PolygonShape | null>(null);
     const [selectedDraftIndex, setSelectedDraftIndex] = useState<number | null>(
       null,
     );
     const [bounds, setBounds] = useState({ x: 0, y: 0, width: 0, height: 0 });
     const dragRef = useRef<{ id: string } | null>(null);
     const draftRef = useRef(draftPoints);
+    const editShapeRef = useRef<PolygonShape | null>(null);
     const selectedDraftIndexRef = useRef(selectedDraftIndex);
     const selectedIdRef = useRef(selectedId);
     const entitiesRef = useRef(entities);
+    const modeRef = useRef(mode);
     const replaceOnCommitRef = useRef(false);
+    const toolPresetRef = useRef(toolPreset);
+    const [cursorPoint, setCursorPoint] = useState<NormPoint | null>(null);
+
     useEffect(() => {
       draftRef.current = draftPoints;
     }, [draftPoints]);
+    useEffect(() => {
+      editShapeRef.current = editShape;
+    }, [editShape]);
+    useEffect(() => {
+      toolPresetRef.current = toolPreset;
+    }, [toolPreset]);
     useEffect(() => {
       selectedDraftIndexRef.current = selectedDraftIndex;
     }, [selectedDraftIndex]);
@@ -107,6 +151,9 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
     useEffect(() => {
       entitiesRef.current = entities;
     }, [entities]);
+    useEffect(() => {
+      modeRef.current = mode;
+    }, [mode]);
 
     const measure = useCallback(() => {
       const el = viewportRef.current;
@@ -130,11 +177,17 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
     }, [measure]);
 
     const selected = entities.find((entity) => entity.id === selectedId) ?? null;
+    const isDrawingMode =
+      mode === "draw-polygon" ||
+      mode === "edit-polygon" ||
+      mode === "draw-band" ||
+      mode === "auto-stack" ||
+      mode === "place-marker";
 
-    const readNormalized = (event: {
-      clientX: number;
-      clientY: number;
-    }) => {
+    const readNormalized = (
+      event: { clientX: number; clientY: number },
+      options?: { clamp?: boolean },
+    ) => {
       const el = viewportRef.current;
       if (!el) return null;
       const rect = el.getBoundingClientRect();
@@ -142,38 +195,119 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
         { clientX: event.clientX, clientY: event.clientY },
         rect,
         { width: imageWidth, height: imageHeight },
+        options,
       );
     };
 
     const commitDraft = useCallback(
-      (points: Array<{ x: number; y: number }>, entityId: string) => {
+      (points: NormPoint[], entityId: string) => {
         if (points.length < 1) return null;
-        const nextSegment = normalizedPointsToSvgPath(
-          points,
-          viewBoxWidth,
-          viewBoxHeight,
-        );
+
+        const editing = modeRef.current === "edit-polygon";
+        const shaped = editShapeRef.current;
+        const nextSegment =
+          editing && shaped && shaped.vertices.length > 0
+            ? polygonShapeToSvgPath(shaped, viewBoxWidth, viewBoxHeight)
+            : normalizedPointsToSvgPath(points, viewBoxWidth, viewBoxHeight);
         if (!nextSegment) return null;
 
         const existing =
           entitiesRef.current.find((entity) => entity.id === entityId)
             ?.svgPath ?? null;
-        const shouldReplace = replaceOnCommitRef.current || !existing;
+        // Floors: never stack multiple strokes — always replace.
+        const shouldReplace =
+          replaceOnCommitRef.current ||
+          editing ||
+          toolPresetRef.current === "floors" ||
+          !existing;
         const svgPath = shouldReplace
           ? nextSegment
           : appendSvgPaths(existing, nextSegment);
         replaceOnCommitRef.current = false;
 
-        onChangeEntity(entityId, { svgPath });
+        const centroid = pathCentroid(
+          editing && shaped ? shaped.vertices : points,
+        );
+        onChangeEntity(entityId, {
+          svgPath,
+          markerX: centroid.x,
+          markerY: centroid.y,
+        });
         onPolygonClosed?.(entityId, svgPath);
-        // Clear draft so the next stroke starts from a new click (not last point).
         draftRef.current = [];
+        editShapeRef.current = null;
         setDraftPoints([]);
+        setEditShape(null);
         setSelectedDraftIndex(null);
-        setMode("draw-polygon");
+        setMode(editing ? "select" : "draw-polygon");
         return svgPath;
       },
       [onChangeEntity, onPolygonClosed, viewBoxHeight, viewBoxWidth],
+    );
+
+    const commitBand = useCallback(
+      (points: NormPoint[], entityId: string) => {
+        if (points.length < 3) return null;
+        const band = bandPolygonFromEdge(points[0]!, points[1]!, points[2]!);
+        replaceOnCommitRef.current = true;
+        const svgPath = normalizedPointsToSvgPath(
+          band,
+          viewBoxWidth,
+          viewBoxHeight,
+        );
+        if (!svgPath) return null;
+        const centroid = pathCentroid(band);
+        onChangeEntity(entityId, {
+          svgPath,
+          markerX: centroid.x,
+          markerY: centroid.y,
+        });
+        onPolygonClosed?.(entityId, svgPath);
+        draftRef.current = [];
+        setDraftPoints([]);
+        setSelectedDraftIndex(null);
+        setMode("draw-band");
+        return svgPath;
+      },
+      [onChangeEntity, onPolygonClosed, viewBoxHeight, viewBoxWidth],
+    );
+
+    const commitAutoStack = useCallback(
+      (points: NormPoint[]) => {
+        if (points.length < 4 || !onBulkPaths) return false;
+        const list = entitiesRef.current;
+        if (list.length === 0) return false;
+        const bands = stackBandsFromQuad(
+          points[0]!,
+          points[1]!,
+          points[2]!,
+          points[3]!,
+          list.length,
+        );
+        // entities assumed ascending floorNumber (1 at bottom → last band).
+        const updates: MappingBulkPathUpdate[] = list.map((entity, index) => {
+          const band = bands[list.length - 1 - index] ?? bands[0]!;
+          const svgPath = normalizedPointsToSvgPath(
+            band,
+            viewBoxWidth,
+            viewBoxHeight,
+          );
+          const centroid = pathCentroid(band);
+          return {
+            id: entity.id,
+            svgPath,
+            markerX: centroid.x,
+            markerY: centroid.y,
+          };
+        });
+        onBulkPaths(updates);
+        draftRef.current = [];
+        setDraftPoints([]);
+        setSelectedDraftIndex(null);
+        setMode("select");
+        return true;
+      },
+      [onBulkPaths, viewBoxHeight, viewBoxWidth],
     );
 
     const closePolygon = useCallback(() => {
@@ -186,24 +320,26 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
 
     const clearDraft = useCallback(() => {
       draftRef.current = [];
+      editShapeRef.current = null;
       setDraftPoints([]);
+      setEditShape(null);
       setSelectedDraftIndex(null);
     }, []);
 
-    const replaceDraftPoints = useCallback(
-      (next: Array<{ x: number; y: number }>) => {
-        draftRef.current = next;
-        setDraftPoints(next);
-      },
-      [],
-    );
+    const replaceDraftPoints = useCallback((next: NormPoint[]) => {
+      draftRef.current = next;
+      setDraftPoints(next);
+    }, []);
+
+    const replaceEditShape = useCallback((next: PolygonShape) => {
+      editShapeRef.current = next;
+      setEditShape(next);
+      draftRef.current = next.vertices;
+      setDraftPoints(next.vertices);
+    }, []);
 
     const updateDraftPoints = useCallback(
-      (
-        updater: (
-          prev: Array<{ x: number; y: number }>,
-        ) => Array<{ x: number; y: number }>,
-      ) => {
+      (updater: (prev: NormPoint[]) => NormPoint[]) => {
         setDraftPoints((prev) => {
           const next = updater(prev);
           draftRef.current = next;
@@ -233,27 +369,74 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
       });
     }, [updateDraftPoints]);
 
+    const discardGuideDraft = useCallback(() => {
+      clearDraft();
+      return true;
+    }, [clearDraft]);
+
     /** Commit open draft when leaving tools. Returns false if cancelled. */
     const resolveOpenDraft = useCallback(() => {
       const draft = draftRef.current;
       if (draft.length === 0) return true;
+      const currentMode = modeRef.current;
+      if (currentMode === "draw-band" || currentMode === "auto-stack") {
+        return discardGuideDraft();
+      }
       const entityId = selectedIdRef.current;
       if (!entityId) return false;
+      if (currentMode === "edit-polygon") {
+        replaceOnCommitRef.current = true;
+      }
       return commitDraft(draft, entityId) != null;
-    }, [commitDraft]);
+    }, [commitDraft, discardGuideDraft]);
 
     const changeMode = useCallback(
       (next: EditorMode) => {
         if (next === mode) return;
         if (!resolveOpenDraft()) return;
         setMode(next);
-        // Entering polygon mode starts a fresh stroke (saved shape stays visible).
-        if (next === "draw-polygon") {
-          replaceOnCommitRef.current = false;
-          clearDraft();
+        if (
+          next === "draw-polygon" ||
+          next === "edit-polygon" ||
+          next === "draw-band" ||
+          next === "auto-stack"
+        ) {
+          replaceOnCommitRef.current = next === "edit-polygon";
+          if (next !== "edit-polygon") clearDraft();
         }
       },
       [clearDraft, mode, resolveOpenDraft],
+    );
+
+    const nudgeSelection = useCallback(
+      (dx: number, dy: number) => {
+        if (draftRef.current.length > 0) {
+          updateDraftPoints((prev) =>
+            prev.map((point) => ({
+              x: clampNormalized(point.x + dx),
+              y: clampNormalized(point.y + dy),
+            })),
+          );
+          return;
+        }
+        const entityId = selectedIdRef.current;
+        if (!entityId) return;
+        const entity = entitiesRef.current.find((item) => item.id === entityId);
+        if (!entity?.svgPath) return;
+        const svgPath = offsetNormalizedPath(
+          entity.svgPath,
+          dx,
+          dy,
+          viewBoxWidth,
+          viewBoxHeight,
+        );
+        onChangeEntity(entityId, {
+          svgPath,
+          markerX: clampNormalized(entity.markerX + dx),
+          markerY: clampNormalized(entity.markerY + dy),
+        });
+      },
+      [onChangeEntity, updateDraftPoints, viewBoxHeight, viewBoxWidth],
     );
 
     useImperativeHandle(
@@ -262,12 +445,20 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
         flushPolygonDraft: () => {
           const entityId = selectedIdRef.current;
           if (!entityId) return null;
+          const currentMode = modeRef.current;
+          if (currentMode === "draw-band") {
+            return commitBand(draftRef.current, entityId);
+          }
+          if (currentMode === "auto-stack") return null;
+          if (currentMode === "edit-polygon") {
+            replaceOnCommitRef.current = true;
+          }
           return commitDraft(draftRef.current, entityId);
         },
         hasOpenDraft: () => draftRef.current.length > 0,
         getDraftPointCount: () => draftRef.current.length,
       }),
-      [commitDraft],
+      [commitBand, commitDraft],
     );
 
     useEffect(() => {
@@ -283,8 +474,38 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
           return;
         }
 
-        if (event.key === "Enter" && draftRef.current.length >= 1) {
+        const step = event.shiftKey ? 0.01 : 0.003;
+        if (event.key === "ArrowLeft") {
           event.preventDefault();
+          nudgeSelection(-step, 0);
+          return;
+        }
+        if (event.key === "ArrowRight") {
+          event.preventDefault();
+          nudgeSelection(step, 0);
+          return;
+        }
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          nudgeSelection(0, -step);
+          return;
+        }
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          nudgeSelection(0, step);
+          return;
+        }
+
+        if (
+          event.key === "Enter" &&
+          (modeRef.current === "draw-polygon" ||
+            modeRef.current === "edit-polygon") &&
+          draftRef.current.length >= 1
+        ) {
+          event.preventDefault();
+          if (modeRef.current === "edit-polygon") {
+            replaceOnCommitRef.current = true;
+          }
           closePolygon();
           return;
         }
@@ -326,22 +547,52 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
       clearDraft,
       closePolygon,
       deleteSelectedDraftPoint,
+      nudgeSelection,
       undoLastDraftPoint,
     ]);
 
     const onCanvasClick = (event: ReactMouseEvent<HTMLDivElement>) => {
       if (dragRef.current) return;
       const point = readNormalized(event);
-      if (!point || !selectedId) return;
+      if (!point) return;
+
+      if (mode === "auto-stack") {
+        updateDraftPoints((prev) => {
+          const next = [...prev, point];
+          if (next.length >= 4) {
+            queueMicrotask(() => {
+              commitAutoStack(next.slice(0, 4));
+            });
+            return next.slice(0, 4);
+          }
+          return next;
+        });
+        return;
+      }
+
+      if (!selectedId) return;
 
       if (mode === "place-marker") {
         onChangeEntity(selectedId, { markerX: point.x, markerY: point.y });
         return;
       }
 
+      if (mode === "draw-band") {
+        updateDraftPoints((prev) => {
+          const next = [...prev, point];
+          if (next.length >= 3) {
+            const entityId = selectedId;
+            queueMicrotask(() => {
+              commitBand(next.slice(0, 3), entityId);
+            });
+            return next.slice(0, 3);
+          }
+          return next;
+        });
+        return;
+      }
+
       if (mode === "draw-polygon") {
-        // Always add the click as a new vertex — self-crossing / overlapping
-        // points are allowed. Alt+click near an existing point selects it.
         if (event.altKey) {
           const threshold = 0.02;
           const nearIndex = draftRef.current.findIndex(
@@ -359,6 +610,8 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
         setSelectedDraftIndex(null);
         updateDraftPoints((prev) => [...prev, point]);
       }
+
+      // edit-polygon: reshape via handles only (no new click points)
     };
 
     const deletePolygon = () => {
@@ -420,6 +673,41 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
       dragRef.current = null;
     };
 
+    const basicTools = [
+      ["select", "Ընտրել", SelectCursorIcon],
+      ["place-marker", "Marker", MarkerPinIcon],
+      ["draw-polygon", "Polygon", PolygonShapeIcon],
+    ] as const;
+
+    const floorTools =
+      toolPreset === "floors"
+        ? ([
+            ["draw-band", "Գոտի", BandStripIcon],
+            ["auto-stack", "Ավտո", AutoStackIcon],
+          ] as const)
+        : [];
+
+    const hintText = (() => {
+      if (mode === "draw-band") {
+        return "Գոտի · 3 կտտոց՝ ձախ-վերև → աջ-վերև → ներքևի եզր։";
+      }
+      if (mode === "auto-stack") {
+        return `Ավտո հարկեր · 4 կտտոց՝ TL → TR → BR → BL (${entities.length} հարկ)։`;
+      }
+      if (mode === "edit-polygon") {
+        return "Եզրի բաց/մանուշակագույն կետը քաշիր՝ կլորացնելու համար։ Alt+click՝ ուղղել։";
+      }
+      if (toolPreset === "floors") {
+        return "Արագ՝ Ավտո / Գոտի։ Խմբագրել · քաշել՝ ձևը ադապտացնելու համար։";
+      }
+      return "Save-ից հետո հաջորդ կտտոցը սկսում է նոր գիծ (հինը մնում է)։ Խմբագրել · քաշել՝ ձևը փոխելու համար։";
+    })();
+
+    const bandPreview =
+      mode === "draw-band" && draftPoints.length >= 3
+        ? bandPolygonFromEdge(draftPoints[0]!, draftPoints[1]!, draftPoints[2]!)
+        : null;
+
     return (
       <div className="space-y-3">
         <div
@@ -427,13 +715,7 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
           role="toolbar"
           aria-label="Mapping tools"
         >
-          {(
-            [
-              ["select", "Ընտրել", SelectCursorIcon],
-              ["place-marker", "Marker", MarkerPinIcon],
-              ["draw-polygon", "Polygon", PolygonShapeIcon],
-            ] as const
-          ).map(([value, label, Icon]) => (
+          {[...basicTools, ...floorTools].map(([value, label, Icon]) => (
             <button
               key={value}
               type="button"
@@ -459,10 +741,10 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
                   if (!selected.svgPath) return;
                   if (!resolveOpenDraft()) return;
                   replaceOnCommitRef.current = true;
-                  setMode("draw-polygon");
+                  setMode("edit-polygon");
                   setSelectedDraftIndex(null);
-                  replaceDraftPoints(
-                    svgPathToNormalizedPoints(
+                  replaceEditShape(
+                    svgPathToPolygonShape(
                       selected.svgPath,
                       viewBoxWidth,
                       viewBoxHeight,
@@ -470,7 +752,7 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
                   );
                 }}
               >
-                Խմբագրել polygon
+                Խմբագրել · քաշել
               </button>
               <button
                 type="button"
@@ -491,19 +773,29 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
               </button>
             </>
           ) : null}
-          {mode === "draw-polygon" || draftPoints.length > 0 ? (
+          {mode === "draw-polygon" ||
+          mode === "edit-polygon" ||
+          ((mode === "draw-band" || mode === "auto-stack") &&
+            draftPoints.length > 0) ? (
             <>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 border border-[var(--mp-ink)] bg-[var(--mp-ink)] px-2.5 py-1.5 text-xs uppercase tracking-[0.14em] text-[var(--mp-panel)] disabled:opacity-40"
-                onClick={closePolygon}
-                disabled={draftPoints.length < 1}
-                title={`Պահպանել գծագիրը (${draftPoints.length} կետ)`}
-                aria-label={`Պահպանել գծագիրը, ${draftPoints.length} կետ`}
-              >
-                <SaveCheckIcon />
-                <span>{draftPoints.length}</span>
-              </button>
+              {mode === "draw-polygon" || mode === "edit-polygon" ? (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 border border-[var(--mp-ink)] bg-[var(--mp-ink)] px-2.5 py-1.5 text-xs uppercase tracking-[0.14em] text-[var(--mp-panel)] disabled:opacity-40"
+                  onClick={() => {
+                    if (mode === "edit-polygon") {
+                      replaceOnCommitRef.current = true;
+                    }
+                    closePolygon();
+                  }}
+                  disabled={draftPoints.length < 1}
+                  title={`Պահպանել գծագիրը (${draftPoints.length} կետ)`}
+                  aria-label={`Պահպանել գծագիրը, ${draftPoints.length} կետ`}
+                >
+                  <SaveCheckIcon />
+                  <span>{draftPoints.length}</span>
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="inline-flex items-center justify-center border border-red-700/40 px-2.5 py-1.5 text-red-800 disabled:opacity-40"
@@ -537,27 +829,56 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
           ) : null}
         </div>
 
-        {draftPoints.length > 0 ? (
+        {draftPoints.length > 0 && mode === "draw-polygon" ? (
           <p className="text-xs text-amber-800">
-            Draft է ({draftPoints.length} կետ)։ Save-ից հետո կարող ես
-            շարունակել նույն գծագիրը — հին կետերը չեն կորչում։ ✓ / Enter՝
-            պահպանել։
+            Գիծը հետևում է cursor-ին։ Կտտացրու կետեր ավելացնելու համար · ✓ /
+            Enter՝ պահպանել
+            {toolPreset === "floors" ? " (փոխարինում է հին գծագիրը)" : ""}։
+          </p>
+        ) : null}
+        {draftPoints.length > 0 && mode === "edit-polygon" ? (
+          <p className="text-xs text-amber-800">
+            Եզրի կետը քաշիր՝ գիծը կլորացնելու համար (գիծը մնում է cursor-ի
+            տակ)։ Alt+click՝ ուղղել։ ✓ / Enter՝ պահպանել։
+          </p>
+        ) : null}
+        {draftPoints.length > 0 &&
+        (mode === "draw-band" || mode === "auto-stack") ? (
+          <p className="text-xs text-amber-800">
+            {mode === "draw-band"
+              ? `Գոտի · ${draftPoints.length}/3 կտտոց`
+              : `Ավտո · ${draftPoints.length}/4 կտտոց`}
           </p>
         ) : null}
 
         <div
           ref={viewportRef}
-          className="relative h-[min(70dvh,720px)] w-full cursor-crosshair overflow-hidden border border-[var(--mp-line)] bg-[var(--mp-stage)]"
+          className="relative h-[min(70dvh,720px)] w-full cursor-crosshair touch-none select-none overflow-hidden border border-[var(--mp-line)] bg-[var(--mp-stage)]"
           onClick={onCanvasClick}
+          onDragStart={(event) => event.preventDefault()}
+          onPointerMove={(event) => {
+            if (
+              mode !== "draw-polygon" &&
+              mode !== "draw-band" &&
+              mode !== "auto-stack"
+            ) {
+              if (cursorPoint) setCursorPoint(null);
+              return;
+            }
+            const point = readNormalized(event, { clamp: true });
+            setCursorPoint(point);
+          }}
+          onPointerLeave={() => setCursorPoint(null)}
         >
           <div
-            className="absolute"
+            className="absolute select-none"
             style={{
               left: bounds.x,
               top: bounds.y,
               width: bounds.width,
               height: bounds.height,
             }}
+            onDragStart={(event) => event.preventDefault()}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -566,15 +887,23 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
               width={imageWidth}
               height={imageHeight}
               draggable={false}
-              className="h-full w-full object-fill select-none"
+              onDragStart={(event) => event.preventDefault()}
+              className="pointer-events-none h-full w-full object-fill select-none [-webkit-user-drag:none]"
+            />
+            {/* Catch empty-area pointer hits so the browser never starts native image drag. */}
+            <div
+              aria-hidden
+              className="absolute inset-0 z-[1]"
+              onDragStart={(event) => event.preventDefault()}
             />
             <svg
-              className="pointer-events-none absolute inset-0 h-full w-full"
+              className="pointer-events-none absolute inset-0 z-[2] h-full w-full"
               viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
               preserveAspectRatio="none"
             >
               {entities.map((entity) =>
-                entity.svgPath ? (
+                entity.svgPath &&
+                !(mode === "edit-polygon" && entity.id === selectedId) ? (
                   <path
                     key={`poly-${entity.id}`}
                     d={entity.svgPath}
@@ -589,29 +918,89 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
                 ) : null,
               )}
               {draftPoints.length > 0 ? (
-                <polyline
-                  points={draftPoints
+                mode === "edit-polygon" && editShape ? (
+                  <path
+                    d={polygonShapeToSvgPath(
+                      editShape,
+                      viewBoxWidth,
+                      viewBoxHeight,
+                    )}
+                    fill="rgba(232,140,72,0.28)"
+                    stroke="#c45c26"
+                    strokeWidth="3"
+                  />
+                ) : (
+                  <polyline
+                    points={draftPoints
+                      .map(
+                        (point) =>
+                          `${point.x * viewBoxWidth},${point.y * viewBoxHeight}`,
+                      )
+                      .join(" ")}
+                    fill="none"
+                    stroke="#c45c26"
+                    strokeWidth="3"
+                    strokeDasharray="8 6"
+                  />
+                )
+              ) : null}
+              {cursorPoint &&
+              draftPoints.length > 0 &&
+              (mode === "draw-polygon" ||
+                mode === "draw-band" ||
+                mode === "auto-stack") ? (
+                <line
+                  x1={draftPoints[draftPoints.length - 1]!.x * viewBoxWidth}
+                  y1={draftPoints[draftPoints.length - 1]!.y * viewBoxHeight}
+                  x2={cursorPoint.x * viewBoxWidth}
+                  y2={cursorPoint.y * viewBoxHeight}
+                  stroke="#c45c26"
+                  strokeWidth="2"
+                  strokeDasharray="4 4"
+                  opacity="0.9"
+                />
+              ) : null}
+              {bandPreview ? (
+                <polygon
+                  points={bandPreview
                     .map(
                       (point) =>
                         `${point.x * viewBoxWidth},${point.y * viewBoxHeight}`,
                     )
                     .join(" ")}
-                  fill="none"
+                  fill="rgba(232,140,72,0.25)"
                   stroke="#c45c26"
-                  strokeWidth="3"
-                  strokeDasharray="8 6"
+                  strokeWidth="2"
                 />
               ) : null}
             </svg>
 
-            {entities.map((entity) => (
+            {mode === "edit-polygon" && editShape && editShape.vertices.length > 0 ? (
+              <PolygonEditHandles
+                shape={editShape}
+                onChangeShape={replaceEditShape}
+                readNormalized={(event) =>
+                  readNormalized(event, { clamp: false })
+                }
+              />
+            ) : null}
+
+            {entities.map((entity) => {
+              if (mode === "edit-polygon" && entity.id !== selectedId) {
+                return null;
+              }
+              const editingSelected =
+                mode === "edit-polygon" && entity.id === selectedId;
+              return (
               <button
                 key={`marker-${entity.id}`}
                 type="button"
-                className={`absolute z-10 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white text-[10px] font-semibold tracking-wide text-white shadow-[0_2px_6px_rgba(0,0,0,0.35)] ${
-                  mode === "place-marker" || mode === "draw-polygon"
-                    ? "pointer-events-none"
-                    : ""
+                className={`absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white font-semibold tracking-wide text-white shadow-[0_2px_6px_rgba(0,0,0,0.35)] ${
+                  editingSelected
+                    ? "h-3.5 w-3.5 text-[8px] opacity-70"
+                    : "h-5 w-5 text-[10px]"
+                } ${
+                  isDrawingMode ? "pointer-events-none" : ""
                 } ${
                   entity.id === selectedId
                     ? "bg-[#d56a20] ring-2 ring-white/80 ring-offset-1 ring-offset-transparent"
@@ -631,15 +1020,12 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
               >
                 {formatMarkerLabel(entity.label)}
               </button>
-            ))}
+              );
+            })}
           </div>
         </div>
 
-        <p className="text-xs text-[var(--mp-ink-muted)]">
-          Save-ից հետո հաջորդ կտտոցը սկսում է նոր գիծ (հինը մնում է)։ Նոր
-          Save-ը միավորում է գծերը։ Ամբողջությամբ փոխելու համար՝ «Խմբագրել» կամ
-          «Նոր polygon»։
-        </p>
+        <p className="text-xs text-[var(--mp-ink-muted)]">{hintText}</p>
       </div>
     );
   },

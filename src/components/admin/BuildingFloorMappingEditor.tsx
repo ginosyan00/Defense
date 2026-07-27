@@ -4,10 +4,17 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   MappingCanvas,
+  type MappingBulkPathUpdate,
   type MappingCanvasHandle,
   type MappingEntity,
 } from "@/components/admin/MappingCanvas";
 import { saveFloorImageMapping } from "@/lib/admin/mapping-actions";
+import {
+  estimatePathHeight,
+  offsetNormalizedPath,
+  pathCentroid,
+  svgPathToNormalizedPoints,
+} from "@/lib/admin/mapping-math";
 
 type FloorEditorItem = MappingEntity & {
   interactionType: "MARKER" | "POLYGON" | "MARKER_AND_POLYGON";
@@ -39,6 +46,7 @@ export function BuildingFloorMappingEditor({
 }: BuildingFloorMappingEditorProps) {
   const router = useRouter();
   const canvasRef = useRef<MappingCanvasHandle>(null);
+  const floorsRef = useRef(initialFloors);
   const [floors, setFloors] = useState(initialFloors);
   const [selectedId, setSelectedId] = useState<string | null>(
     initialFloors[0]?.id ?? null,
@@ -47,41 +55,43 @@ export function BuildingFloorMappingEditor({
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState(false);
 
+  floorsRef.current = floors;
+
+  const sortedFloors = useMemo(
+    () => [...floors].sort((a, b) => a.floorNumber - b.floorNumber),
+    [floors],
+  );
+
   const selected = useMemo(
     () => floors.find((item) => item.id === selectedId) ?? null,
     [floors, selectedId],
   );
 
   const persistFloor = useCallback(
-    async (item: FloorEditorItem, note: string) => {
-      setPending(true);
-      setMessage("Պահպանվում է…");
-      try {
-        const result = await saveFloorImageMapping({
-          floorId: item.id,
-          markerX: item.markerX,
-          markerY: item.markerY,
-          markerLabel: item.label,
-          svgPath: item.svgPath,
-          interactionType: item.interactionType,
-          projectSlug,
-          districtSlug,
-          buildingSlug,
-        });
-        if (result.ok) {
-          setDirtyIds((prev) => {
-            const next = new Set(prev);
-            next.delete(item.id);
-            return next;
-          });
-          setMessage(note);
-          router.refresh();
-        } else {
-          setMessage(result.error);
-        }
-      } finally {
-        setPending(false);
+    async (item: FloorEditorItem, note: string, refresh = true) => {
+      const result = await saveFloorImageMapping({
+        floorId: item.id,
+        markerX: item.markerX,
+        markerY: item.markerY,
+        markerLabel: item.label,
+        svgPath: item.svgPath,
+        interactionType: item.interactionType,
+        projectSlug,
+        districtSlug,
+        buildingSlug,
+      });
+      if (!result.ok) {
+        setMessage(result.error);
+        return false;
       }
+      setDirtyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+      if (note) setMessage(note);
+      if (refresh) router.refresh();
+      return true;
     },
     [buildingSlug, districtSlug, projectSlug, router],
   );
@@ -121,10 +131,11 @@ export function BuildingFloorMappingEditor({
       return prev.map((item) => (item.id === id ? next : item));
     });
     if (toSave) {
+      setPending(true);
       void persistFloor(
         toSave,
         "✓ Հարկի գծագիրը պահպանված է (refresh-ից հետո կմնա)",
-      );
+      ).finally(() => setPending(false));
     }
   };
 
@@ -145,8 +156,107 @@ export function BuildingFloorMappingEditor({
       return prev.map((item) => (item.id === id ? next : item));
     });
     if (toSave) {
-      void persistFloor(toSave, "Հարկի գծագիրը ջնջված է");
+      setPending(true);
+      void persistFloor(toSave, "Հարկի գծագիրը ջնջված է").finally(() =>
+        setPending(false),
+      );
     }
+  };
+
+  const onBulkPaths = useCallback(
+    (updates: MappingBulkPathUpdate[]) => {
+      const byId = new Map(updates.map((item) => [item.id, item]));
+      const nextFloors = floorsRef.current.map((item) => {
+        const update = byId.get(item.id);
+        if (!update) return item;
+        return {
+          ...item,
+          svgPath: update.svgPath,
+          markerX: update.markerX,
+          markerY: update.markerY,
+          interactionType: "MARKER_AND_POLYGON" as const,
+        };
+      });
+      floorsRef.current = nextFloors;
+      setFloors(nextFloors);
+      setDirtyIds(new Set());
+
+      setPending(true);
+      setMessage("Ավտո հարկերը պահպանվում են…");
+      void (async () => {
+        try {
+          for (const item of nextFloors) {
+            if (!byId.has(item.id)) continue;
+            const ok = await persistFloor(item, "", false);
+            if (!ok) return;
+          }
+          setMessage(`✓ ${updates.length} հարկ պահպանված է`);
+          router.refresh();
+        } finally {
+          setPending(false);
+        }
+      })();
+    },
+    [persistFloor, router],
+  );
+
+  const copyToNeighbor = async (direction: "up" | "down") => {
+    if (!selected?.svgPath) {
+      setMessage("Նախ գծիր/պահպանիր ընտրված հարկի polygon-ը։");
+      return;
+    }
+    const sorted = [...floors].sort(
+      (a, b) => a.floorNumber - b.floorNumber,
+    );
+    const index = sorted.findIndex((item) => item.id === selected.id);
+    if (index < 0) return;
+    const target =
+      direction === "up" ? sorted[index + 1] : sorted[index - 1];
+    if (!target) {
+      setMessage(
+        direction === "up"
+          ? "Ավելի բարձր հարկ չկա։"
+          : "Ավելի ցածր հարկ չկա։",
+      );
+      return;
+    }
+
+    const points = svgPathToNormalizedPoints(
+      selected.svgPath,
+      viewBoxWidth,
+      viewBoxHeight,
+    );
+    const height = estimatePathHeight(points);
+    const dy = direction === "up" ? -height : height;
+    const svgPath = offsetNormalizedPath(
+      selected.svgPath,
+      0,
+      dy,
+      viewBoxWidth,
+      viewBoxHeight,
+    );
+    const centroid = pathCentroid(
+      svgPathToNormalizedPoints(svgPath, viewBoxWidth, viewBoxHeight),
+    );
+    const next: FloorEditorItem = {
+      ...target,
+      svgPath,
+      markerX: centroid.x,
+      markerY: centroid.y,
+      interactionType: "MARKER_AND_POLYGON",
+    };
+
+    setFloors((prev) =>
+      prev.map((item) => (item.id === target.id ? next : item)),
+    );
+    setSelectedId(target.id);
+    setPending(true);
+    await persistFloor(
+      next,
+      direction === "up"
+        ? `✓ Պատճենված է վեր · Հարկ ${target.floorNumber}`
+        : `✓ Պատճենված է ներքև · Հարկ ${target.floorNumber}`,
+    ).finally(() => setPending(false));
   };
 
   const onSave = async () => {
@@ -154,12 +264,13 @@ export function BuildingFloorMappingEditor({
     if (canvasRef.current?.hasOpenDraft()) {
       const flushed = canvasRef.current.flushPolygonDraft();
       if (flushed) return;
-      setMessage(
-        "Draft չկա պահպանելու։ Նախ գծիր առնվազն 1 կետ։",
-      );
+      setMessage("Draft չկա պահպանելու։ Նախ գծիր առնվազն 1 կետ։");
       return;
     }
-    await persistFloor(selected, "✓ Պահպանված է");
+    setPending(true);
+    await persistFloor(selected, "✓ Պահպանված է").finally(() =>
+      setPending(false),
+    );
   };
 
   return (
@@ -243,17 +354,39 @@ export function BuildingFloorMappingEditor({
               {pending ? "Պահպանում…" : "Պահպանել"}
             </button>
             {selected.svgPath ? (
-              <button
-                type="button"
-                className="w-full border border-red-700/40 px-3 py-2 text-xs uppercase tracking-[0.14em] text-red-800 disabled:opacity-50"
-                onClick={() => {
-                  if (!window.confirm("Ջնջե՞լ այս հարկի գծագիրը։")) return;
-                  onPolygonDeleted(selected.id);
-                }}
-                disabled={pending}
-              >
-                Ջնջել polygon
-              </button>
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    className="border border-[var(--mp-line)] px-2 py-2 text-[10px] uppercase tracking-[0.12em] disabled:opacity-50"
+                    onClick={() => void copyToNeighbor("up")}
+                    disabled={pending}
+                    title="Պատճենել ավելի բարձր հարկ"
+                  >
+                    Պատճենել վեր
+                  </button>
+                  <button
+                    type="button"
+                    className="border border-[var(--mp-line)] px-2 py-2 text-[10px] uppercase tracking-[0.12em] disabled:opacity-50"
+                    onClick={() => void copyToNeighbor("down")}
+                    disabled={pending}
+                    title="Պատճենել ավելի ցածր հարկ"
+                  >
+                    Պատճենել ներքև
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="w-full border border-red-700/40 px-3 py-2 text-xs uppercase tracking-[0.14em] text-red-800 disabled:opacity-50"
+                  onClick={() => {
+                    if (!window.confirm("Ջնջե՞լ այս հարկի գծագիրը։")) return;
+                    onPolygonDeleted(selected.id);
+                  }}
+                  disabled={pending}
+                >
+                  Ջնջել polygon
+                </button>
+              </>
             ) : null}
             {message ? (
               <p className="text-xs text-[var(--mp-ink-muted)]">{message}</p>
@@ -264,17 +397,19 @@ export function BuildingFloorMappingEditor({
 
       <MappingCanvas
         ref={canvasRef}
+        toolPreset="floors"
         imageUrl={imageUrl}
         imageWidth={imageWidth}
         imageHeight={imageHeight}
         viewBoxWidth={viewBoxWidth}
         viewBoxHeight={viewBoxHeight}
-        entities={floors}
+        entities={sortedFloors}
         selectedId={selectedId}
         onSelect={setSelectedId}
         onChangeEntity={onChangeEntity}
         onPolygonClosed={onPolygonClosed}
         onPolygonDeleted={onPolygonDeleted}
+        onBulkPaths={onBulkPaths}
       />
     </div>
   );
