@@ -162,7 +162,7 @@ export function FloorApartmentMappingEditor({
     if (canvasRef.current?.hasOpenDraft()) {
       const flushed = canvasRef.current.flushPolygonDraft();
       if (flushed) return;
-      setMessage("Draft-ը ≥3 կետ չունի։");
+      setMessage("Draft չկա պահպանելու։ Նախ գծիր առնվազն 1 կետ։");
       return;
     }
     await persistApartment(selected, "✓ Պահպանված է");
@@ -190,7 +190,7 @@ export function FloorApartmentMappingEditor({
                     const flushed = canvasRef.current.flushPolygonDraft();
                     if (!flushed) {
                       setMessage(
-                        "Draft-ը ≥3 կետ չունի։ Ավելացրու կետեր կամ Չեղարկիր։",
+                        "Draft չկա պահպանելու։ Նախ գծիր առնվազն 1 կետ կամ Չեղարկիր։",
                       );
                       return;
                     }

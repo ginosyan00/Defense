@@ -154,7 +154,9 @@ export function BuildingFloorMappingEditor({
     if (canvasRef.current?.hasOpenDraft()) {
       const flushed = canvasRef.current.flushPolygonDraft();
       if (flushed) return;
-      setMessage("Draft-ը ≥3 կետ չունի։");
+      setMessage(
+        "Draft չկա պահպանելու։ Նախ գծիր առնվազն 1 կետ։",
+      );
       return;
     }
     await persistFloor(selected, "✓ Պահպանված է");

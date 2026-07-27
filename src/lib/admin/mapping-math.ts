@@ -41,13 +41,17 @@ export function normalizedPointsToSvgPath(
   viewBoxWidth: number,
   viewBoxHeight: number,
 ): string {
-  if (points.length < 3) return "";
+  if (points.length < 1) return "";
   const commands = points.map((point, index) => {
     const px = point.x * viewBoxWidth;
     const py = point.y * viewBoxHeight;
     return `${index === 0 ? "M" : "L"} ${px.toFixed(2)} ${py.toFixed(2)}`;
   });
-  return `${commands.join(" ")} Z`;
+  // Close only for real polygons; 1–2 points stay as open path / point.
+  if (points.length >= 3) {
+    return `${commands.join(" ")} Z`;
+  }
+  return commands.join(" ");
 }
 
 /** Parse simple M/L ... Z path into normalized points. */

@@ -37,9 +37,10 @@ export type MappingEntity = {
 };
 
 export type MappingCanvasHandle = {
-  /** Closes open draft (≥3 points) and persists via onPolygonClosed. */
-  flushPolygonDraft: () => boolean;
+  /** Commits open draft (≥1 point). Returns saved svgPath, or null if nothing to save. */
+  flushPolygonDraft: () => string | null;
   hasOpenDraft: () => boolean;
+  getDraftPointCount: () => number;
 };
 
 type EditorMode = "select" | "place-marker" | "draw-polygon";
@@ -91,6 +92,7 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
     const draftRef = useRef(draftPoints);
     const selectedDraftIndexRef = useRef(selectedDraftIndex);
     const selectedIdRef = useRef(selectedId);
+    const entitiesRef = useRef(entities);
     useEffect(() => {
       draftRef.current = draftPoints;
     }, [draftPoints]);
@@ -100,6 +102,9 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
     useEffect(() => {
       selectedIdRef.current = selectedId;
     }, [selectedId]);
+    useEffect(() => {
+      entitiesRef.current = entities;
+    }, [entities]);
 
     const measure = useCallback(() => {
       const el = viewportRef.current;
@@ -124,6 +129,17 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
 
     const selected = entities.find((entity) => entity.id === selectedId) ?? null;
 
+    const loadSavedPolygonPoints = useCallback(
+      (entityId: string) => {
+        const path =
+          entitiesRef.current.find((entity) => entity.id === entityId)
+            ?.svgPath ?? null;
+        if (!path) return [] as Array<{ x: number; y: number }>;
+        return svgPathToNormalizedPoints(path, viewBoxWidth, viewBoxHeight);
+      },
+      [viewBoxHeight, viewBoxWidth],
+    );
+
     const readNormalized = (event: {
       clientX: number;
       clientY: number;
@@ -140,19 +156,21 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
 
     const commitDraft = useCallback(
       (points: Array<{ x: number; y: number }>, entityId: string) => {
-        if (points.length < 3) return false;
+        if (points.length < 1) return null;
         const svgPath = normalizedPointsToSvgPath(
           points,
           viewBoxWidth,
           viewBoxHeight,
         );
-        if (!svgPath) return false;
+        if (!svgPath) return null;
         onChangeEntity(entityId, { svgPath });
         onPolygonClosed?.(entityId, svgPath);
-        setDraftPoints([]);
+        // Keep draft points so "continue drawing" appends to the same polygon.
+        draftRef.current = points;
+        setDraftPoints(points);
         setSelectedDraftIndex(null);
         setMode("draw-polygon");
-        return true;
+        return svgPath;
       },
       [onChangeEntity, onPolygonClosed, viewBoxHeight, viewBoxWidth],
     );
@@ -160,23 +178,49 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
     const closePolygon = useCallback(() => {
       const entityId = selectedIdRef.current;
       if (!entityId) return;
-      commitDraft(draftRef.current, entityId);
+      const points = draftRef.current;
+      if (points.length < 1) return;
+      commitDraft(points, entityId);
     }, [commitDraft]);
 
     const clearDraft = useCallback(() => {
+      draftRef.current = [];
       setDraftPoints([]);
       setSelectedDraftIndex(null);
     }, []);
 
+    const replaceDraftPoints = useCallback(
+      (next: Array<{ x: number; y: number }>) => {
+        draftRef.current = next;
+        setDraftPoints(next);
+      },
+      [],
+    );
+
+    const updateDraftPoints = useCallback(
+      (
+        updater: (
+          prev: Array<{ x: number; y: number }>,
+        ) => Array<{ x: number; y: number }>,
+      ) => {
+        setDraftPoints((prev) => {
+          const next = updater(prev);
+          draftRef.current = next;
+          return next;
+        });
+      },
+      [],
+    );
+
     const deleteSelectedDraftPoint = useCallback(() => {
       const index = selectedDraftIndexRef.current;
       if (index == null) return;
-      setDraftPoints((prev) => prev.filter((_, i) => i !== index));
+      updateDraftPoints((prev) => prev.filter((_, i) => i !== index));
       setSelectedDraftIndex(null);
-    }, []);
+    }, [updateDraftPoints]);
 
     const undoLastDraftPoint = useCallback(() => {
-      setDraftPoints((prev) => {
+      updateDraftPoints((prev) => {
         if (prev.length === 0) return prev;
         const next = prev.slice(0, -1);
         setSelectedDraftIndex((current) => {
@@ -186,35 +230,33 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
         });
         return next;
       });
-    }, []);
+    }, [updateDraftPoints]);
 
-    /** Commit (≥3) or ask before discarding incomplete draft. Returns false if cancelled. */
+    /** Commit open draft when leaving tools. Returns false if cancelled. */
     const resolveOpenDraft = useCallback(() => {
       const draft = draftRef.current;
       if (draft.length === 0) return true;
-      if (draft.length >= 3) {
-        const entityId = selectedIdRef.current;
-        if (!entityId) return false;
-        return commitDraft(draft, entityId);
-      }
-      if (
-        !window.confirm(
-          "Չպահպանված draft կա (<3 կետ)։ Չեղարկե՞լ և շարունակել։",
-        )
-      ) {
-        return false;
-      }
-      clearDraft();
-      return true;
-    }, [clearDraft, commitDraft]);
+      const entityId = selectedIdRef.current;
+      if (!entityId) return false;
+      return commitDraft(draft, entityId) != null;
+    }, [commitDraft]);
 
     const changeMode = useCallback(
       (next: EditorMode) => {
         if (next === mode) return;
         if (!resolveOpenDraft()) return;
         setMode(next);
+        if (next === "draw-polygon") {
+          const entityId = selectedIdRef.current;
+          if (!entityId || draftRef.current.length > 0) return;
+          const saved = loadSavedPolygonPoints(entityId);
+          if (saved.length > 0) {
+            setSelectedDraftIndex(null);
+            replaceDraftPoints(saved);
+          }
+        }
       },
-      [mode, resolveOpenDraft],
+      [loadSavedPolygonPoints, mode, replaceDraftPoints, resolveOpenDraft],
     );
 
     useImperativeHandle(
@@ -222,10 +264,11 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
       () => ({
         flushPolygonDraft: () => {
           const entityId = selectedIdRef.current;
-          if (!entityId) return false;
+          if (!entityId) return null;
           return commitDraft(draftRef.current, entityId);
         },
         hasOpenDraft: () => draftRef.current.length > 0,
+        getDraftPointCount: () => draftRef.current.length,
       }),
       [commitDraft],
     );
@@ -243,7 +286,7 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
           return;
         }
 
-        if (event.key === "Enter" && draftRef.current.length >= 3) {
+        if (event.key === "Enter" && draftRef.current.length >= 1) {
           event.preventDefault();
           closePolygon();
           return;
@@ -300,8 +343,29 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
       }
 
       if (mode === "draw-polygon") {
+        // Always add the click as a new vertex — self-crossing / overlapping
+        // points are allowed. Alt+click near an existing point selects it.
+        if (event.altKey) {
+          const threshold = 0.02;
+          const nearIndex = draftRef.current.findIndex(
+            (existing) =>
+              Math.hypot(existing.x - point.x, existing.y - point.y) <=
+              threshold,
+          );
+          if (nearIndex >= 0) {
+            setSelectedDraftIndex((current) =>
+              current === nearIndex ? null : nearIndex,
+            );
+            return;
+          }
+        }
         setSelectedDraftIndex(null);
-        setDraftPoints((prev) => [...prev, point]);
+        updateDraftPoints((prev) => {
+          // If draft was cleared but a saved polygon exists, continue from it.
+          const base =
+            prev.length > 0 ? prev : loadSavedPolygonPoints(selectedId);
+          return [...base, point];
+        });
       }
     };
 
@@ -403,7 +467,7 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
                   if (!resolveOpenDraft()) return;
                   setMode("draw-polygon");
                   setSelectedDraftIndex(null);
-                  setDraftPoints(
+                  replaceDraftPoints(
                     svgPathToNormalizedPoints(
                       selected.svgPath,
                       viewBoxWidth,
@@ -439,7 +503,7 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
                 type="button"
                 className="inline-flex items-center gap-1.5 border border-[var(--mp-ink)] bg-[var(--mp-ink)] px-2.5 py-1.5 text-xs uppercase tracking-[0.14em] text-[var(--mp-panel)] disabled:opacity-40"
                 onClick={closePolygon}
-                disabled={draftPoints.length < 3}
+                disabled={draftPoints.length < 1}
                 title={`Պահպանել գծագիրը (${draftPoints.length} կետ)`}
                 aria-label={`Պահպանել գծագիրը, ${draftPoints.length} կետ`}
               >
@@ -479,16 +543,11 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
           ) : null}
         </div>
 
-        {draftPoints.length > 0 && draftPoints.length < 3 ? (
+        {draftPoints.length > 0 ? (
           <p className="text-xs text-amber-800">
-            Draft է — դեռ չի պահպանվել։ Ավելացրու առնվազն {3 - draftPoints.length}{" "}
-            կետ և սեղմիր «Պահպանել գծագիրը» (կամ Enter)։
-          </p>
-        ) : null}
-        {draftPoints.length >= 3 ? (
-          <p className="text-xs text-amber-800">
-            Draft պատրաստ է։ Պարտադիր սեղմիր «Պահպանել գծագիրը» կամ Enter —
-            այլապես refresh-ից հետո կանհետանա։
+            Draft է ({draftPoints.length} կետ)։ Save-ից հետո կարող ես
+            շարունակել նույն գծագիրը — հին կետերը չեն կորչում։ ✓ / Enter՝
+            պահպանել։
           </p>
         ) : null}
 
@@ -551,48 +610,15 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
               ) : null}
             </svg>
 
-            {draftPoints.map((point, index) => (
-              <button
-                key={`draft-pt-${index}`}
-                type="button"
-                aria-label={`Կետ ${index + 1}${selectedDraftIndex === index ? ", ընտրված" : ""}`}
-                className="absolute z-20 h-5 w-5 -translate-x-1/2 -translate-y-1/2 opacity-0"
-                style={{
-                  left: `${point.x * 100}%`,
-                  top: `${point.y * 100}%`,
-                }}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setMode("draw-polygon");
-                  setSelectedDraftIndex((current) =>
-                    current === index ? null : index,
-                  );
-                }}
-              />
-            ))}
-
-            {draftPoints.length >= 3 ? (
-              <button
-                type="button"
-                className="absolute z-20 translate-x-3 -translate-y-1/2 border border-[var(--mp-ink)] bg-[var(--mp-ink)] px-3 py-2 text-xs uppercase tracking-[0.14em] text-[var(--mp-panel)] shadow-lg"
-                style={{
-                  left: `${draftPoints[draftPoints.length - 1]!.x * 100}%`,
-                  top: `${draftPoints[draftPoints.length - 1]!.y * 100}%`,
-                }}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  closePolygon();
-                }}
-              >
-                Պահպանել
-              </button>
-            ) : null}
-
             {entities.map((entity) => (
               <button
                 key={`marker-${entity.id}`}
                 type="button"
                 className={`absolute z-10 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white text-xs font-semibold tracking-wide text-white shadow-[0_3px_10px_rgba(0,0,0,0.35)] ${
+                  mode === "place-marker" || mode === "draw-polygon"
+                    ? "pointer-events-none"
+                    : ""
+                } ${
                   entity.id === selectedId
                     ? "bg-[#d56a20] ring-2 ring-white/80 ring-offset-1 ring-offset-transparent"
                     : "bg-[#e07a2f]"
@@ -616,9 +642,9 @@ export const MappingCanvas = forwardRef<MappingCanvasHandle, MappingCanvasProps>
         </div>
 
         <p className="text-xs text-[var(--mp-ink-muted)]">
-          Նարնջագույն գիծը draft է։ Կտտացրու կետին՝ ընտրելու համար, հետո
-          «Ջնջել կետը» կամ Delete։ Ctrl+Z՝ վերջին կետը հետ։ Պահպանիր գծագիրը
-          Enter-ով։
+          Marker/Polygon mode-ում կարող ես սեղմել ցանկացած տեղ։ Գծերը կարող են
+          հատվել։ Save → շարունակիր գծել → նորից Save՝ հին գծագիրը մնում է։
+          Ամբողջությամբ նոր սկսելու համար՝ «Նոր polygon»։
         </p>
       </div>
     );

@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   MappingCanvas,
   type MappingCanvasHandle,
@@ -34,15 +33,19 @@ export function DistrictBuildingEditor({
   viewBoxHeight,
   initialBuildings,
 }: DistrictBuildingEditorProps) {
-  const router = useRouter();
   const canvasRef = useRef<MappingCanvasHandle>(null);
   const [buildings, setBuildings] = useState(initialBuildings);
+  const buildingsRef = useRef(buildings);
   const [selectedId, setSelectedId] = useState<string | null>(
     initialBuildings[0]?.id ?? null,
   );
   const [message, setMessage] = useState<string | null>(null);
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    buildingsRef.current = buildings;
+  }, [buildings]);
 
   const selected = useMemo(
     () => buildings.find((item) => item.id === selectedId) ?? null,
@@ -65,13 +68,22 @@ export function DistrictBuildingEditor({
           districtSlug,
         });
         if (result.ok) {
+          setBuildings((prev) =>
+            prev.map((row) => (row.id === item.id ? item : row)),
+          );
+          buildingsRef.current = buildingsRef.current.map((row) =>
+            row.id === item.id ? item : row,
+          );
           setDirtyIds((prev) => {
             const next = new Set(prev);
             next.delete(item.id);
             return next;
           });
-          setMessage(note);
-          router.refresh();
+          setMessage(
+            item.svgPath
+              ? note
+              : "✓ Մարկերը պահպանված է (գծագիր չկա — Polygon-ով գծիր ու ✓ սեղմիր)",
+          );
         } else {
           setMessage(result.error);
         }
@@ -79,84 +91,90 @@ export function DistrictBuildingEditor({
         setPending(false);
       }
     },
-    [districtSlug, projectSlug, router],
+    [districtSlug, projectSlug],
   );
 
   const onChangeEntity = (
     id: string,
     patch: Partial<Pick<MappingEntity, "markerX" | "markerY" | "svgPath">>,
   ) => {
-    setBuildings((prev) =>
-      prev.map((item) => {
+    setBuildings((prev) => {
+      const next = prev.map((item) => {
         if (item.id !== id) return item;
-        const next = { ...item, ...patch };
+        const updated = { ...item, ...patch };
         if (patch.svgPath && item.interactionType === "MARKER") {
-          next.interactionType = "MARKER_AND_POLYGON";
+          updated.interactionType = "MARKER_AND_POLYGON";
         }
-        return next;
-      }),
-    );
+        return updated;
+      });
+      buildingsRef.current = next;
+      return next;
+    });
     setDirtyIds((prev) => new Set(prev).add(id));
   };
 
   const onPolygonClosed = (id: string, svgPath: string) => {
-    let toSave: BuildingEditorItem | null = null;
-    setBuildings((prev) => {
-      const current = prev.find((item) => item.id === id);
-      if (!current) return prev;
-      const next: BuildingEditorItem = {
-        ...current,
-        svgPath,
-        interactionType:
-          current.interactionType === "MARKER"
-            ? "MARKER_AND_POLYGON"
-            : current.interactionType === "POLYGON"
-              ? "MARKER_AND_POLYGON"
-              : current.interactionType,
-      };
-      toSave = next;
-      return prev.map((item) => (item.id === id ? next : item));
-    });
-    if (toSave) {
-      void persistBuilding(
-        toSave,
-        "✓ Գծագիրը պահպանված է DB-ում (refresh-ից հետո կմնա)",
-      );
+    const current = buildingsRef.current.find((item) => item.id === id);
+    if (!current) {
+      setMessage("Շենքը չի գտնվել — գծագիրը չպահպանվեց");
+      return;
     }
+    const next: BuildingEditorItem = {
+      ...current,
+      svgPath,
+      interactionType:
+        current.interactionType === "MARKER" ||
+        current.interactionType === "POLYGON"
+          ? "MARKER_AND_POLYGON"
+          : current.interactionType,
+    };
+    setBuildings((prev) => prev.map((item) => (item.id === id ? next : item)));
+    buildingsRef.current = buildingsRef.current.map((item) =>
+      item.id === id ? next : item,
+    );
+    void persistBuilding(
+      next,
+      `✓ Գծագիրը պահպանված է DB-ում (${svgPath.length} նիշ)`,
+    );
   };
 
   const onPolygonDeleted = (id: string) => {
-    let toSave: BuildingEditorItem | null = null;
-    setBuildings((prev) => {
-      const current = prev.find((item) => item.id === id);
-      if (!current) return prev;
-      const next: BuildingEditorItem = {
-        ...current,
-        svgPath: null,
-        interactionType:
-          current.interactionType === "POLYGON"
-            ? "MARKER"
-            : current.interactionType,
-      };
-      toSave = next;
-      return prev.map((item) => (item.id === id ? next : item));
-    });
-    if (toSave) {
-      void persistBuilding(toSave, "Գծագիրը ջնջված է");
-    }
+    const current = buildingsRef.current.find((item) => item.id === id);
+    if (!current) return;
+    const next: BuildingEditorItem = {
+      ...current,
+      svgPath: null,
+      interactionType:
+        current.interactionType === "POLYGON"
+          ? "MARKER"
+          : current.interactionType,
+    };
+    setBuildings((prev) => prev.map((item) => (item.id === id ? next : item)));
+    buildingsRef.current = buildingsRef.current.map((item) =>
+      item.id === id ? next : item,
+    );
+    void persistBuilding(next, "Գծագիրը ջնջված է");
   };
 
   const onSave = async () => {
     if (!selected) return;
-    if (canvasRef.current?.hasOpenDraft()) {
-      const flushed = canvasRef.current.flushPolygonDraft();
-      if (flushed) return;
-      setMessage(
-        "Draft-ը դեռ ≥3 կետ չունի։ Ավելացրու կետեր կամ Չեղարկիր draft-ը։",
-      );
+
+    const draftCount = canvasRef.current?.getDraftPointCount() ?? 0;
+    if (draftCount > 0) {
+      const savedPath = canvasRef.current?.flushPolygonDraft() ?? null;
+      if (!savedPath) {
+        setMessage(
+          "Գծագիրը չպահպանվեց։ Polygon mode-ում գծիր կետեր, հետո սեղմիր ✓ կամ Պահպանել։",
+        );
+        return;
+      }
+      // flush → onPolygonClosed → persistBuilding
       return;
     }
-    await persistBuilding(selected, "✓ Պահպանված է");
+
+    const latest =
+      buildingsRef.current.find((item) => item.id === selected.id) ?? selected;
+    await persistBuilding(latest, "✓ Պահպանված է");
   };
 
   return (

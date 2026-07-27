@@ -148,7 +148,7 @@ export function MasterplanMappingEditor({
       const flushed = canvasRef.current.flushPolygonDraft();
       if (flushed) return;
       setMessage(
-        "Draft-ը դեռ ≥3 կետ չունի։ Ավելացրու կետեր կամ Չեղարկիր draft-ը։",
+        "Draft չկա պահպանելու։ Նախ գծիր առնվազն 1 կետ, կամ շարունակիր Polygon mode-ում։",
       );
       return;
     }

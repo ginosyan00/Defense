@@ -66,7 +66,6 @@ export default async function AdminDistrictEditorPage({ params }: PageProps) {
       />
 
       <DistrictBuildingEditor
-        key={cacheBusted}
         projectSlug={projectSlug}
         districtSlug={districtSlug}
         imageUrl={cacheBusted}
