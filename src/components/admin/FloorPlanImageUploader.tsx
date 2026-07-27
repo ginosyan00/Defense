@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { uploadFloorPlanImage } from "@/lib/admin/upload-floor-plan";
 
 type FloorPlanImageUploaderProps = {
@@ -11,6 +11,8 @@ type FloorPlanImageUploaderProps = {
   buildingSlug: string;
   floorNumber: number;
   currentImageUrl: string | null;
+  /** Open file picker automatically when landing with #upload */
+  autoOpen?: boolean;
 };
 
 function readImageSize(file: File): Promise<{ width: number; height: number }> {
@@ -36,11 +38,40 @@ export function FloorPlanImageUploader({
   buildingSlug,
   floorNumber,
   currentImageUrl,
+  autoOpen = false,
 }: FloorPlanImageUploaderProps) {
   const router = useRouter();
+  const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [highlight, setHighlight] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  const openFilePicker = () => {
+    setHighlight(true);
+    rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => {
+      inputRef.current?.click();
+    }, 250);
+    window.setTimeout(() => setHighlight(false), 2500);
+  };
+
+  useEffect(() => {
+    const shouldOpen =
+      autoOpen ||
+      (typeof window !== "undefined" && window.location.hash === "#upload");
+
+    if (shouldOpen) {
+      openFilePicker();
+    }
+
+    const onOpenEvent = () => openFilePicker();
+    window.addEventListener("open-floor-plan-upload", onOpenEvent);
+    return () => {
+      window.removeEventListener("open-floor-plan-upload", onOpenEvent);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open once on mount / hash
+  }, [autoOpen, floorId]);
 
   const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -70,6 +101,13 @@ export function FloorPlanImageUploader({
         setMessage(
           `✓ Հատակագիծը պահպանված է (${result.width}×${result.height}). Հին բնակարանների polygon-ները մաքրվել են — վերագծիր և կապիր։`,
         );
+        if (typeof window !== "undefined" && window.location.hash === "#upload") {
+          window.history.replaceState(
+            null,
+            "",
+            `${window.location.pathname}${window.location.search}`,
+          );
+        }
         router.refresh();
       } catch (error) {
         setMessage(
@@ -82,15 +120,23 @@ export function FloorPlanImageUploader({
   };
 
   return (
-    <div className="space-y-3 border border-[var(--mp-line)] p-4">
+    <div
+      ref={rootRef}
+      id="upload"
+      className={`space-y-3 border p-4 transition ${
+        highlight
+          ? "border-[#e07a2f] bg-[#e07a2f]/10 ring-2 ring-[#e07a2f]/40"
+          : "border-[var(--mp-line)]"
+      }`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-[family-name:var(--font-display)] text-xl">
-            Հատակագծի նկար
+            Հատակագծի նկար · upload
           </h2>
           <p className="mt-1 text-xs text-[var(--mp-ink-muted)]">
-            Upload արա հատակագիծը, հետո գծիր բնակարանների տարածքները և կապիր
-            apartment entity-ին։
+            Շենքի նարնջագույն գոտուն սեղմելուց հետո այստեղ upload արա այդ հարկի
+            հատակագիծը, հետո գծիր բնակարանները։
           </p>
         </div>
         <button
@@ -121,7 +167,8 @@ export function FloorPlanImageUploader({
         </div>
       ) : (
         <p className="text-sm text-amber-800">
-          Հատակագիծ դեռ չկա։ Ավելացրու նկար՝ բնակարաններ գծելու համար։
+          Հատակագիծ դեռ չկա։ Սեղմիր «Ավելացնել / փոխել նկար» կամ ընտրիր ֆայլը
+          բացված պատուհանից։
         </p>
       )}
 

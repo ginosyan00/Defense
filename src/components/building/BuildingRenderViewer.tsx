@@ -26,10 +26,17 @@ type BuildingRenderViewerProps = {
   viewBox: string;
   buildingName: string;
   floors: BuildingRenderFloor[];
+  /** Pre-highlight a floor (e.g. current admin floor). */
+  initialActiveFloorId?: string | null;
+  /** Hide the side list when embedded in admin. */
+  compact?: boolean;
+  /** Override default navigation (e.g. open upload panel). */
+  onFloorClick?: (floor: BuildingRenderFloor) => void;
 };
 
 /**
  * Static building render + SVG floor overlays (no WebGL).
+ * Hover → orange band; click → opens that floor's plan / apartments page.
  */
 export function BuildingRenderViewer({
   imageUrl,
@@ -38,17 +45,36 @@ export function BuildingRenderViewer({
   viewBox,
   buildingName,
   floors,
+  initialActiveFloorId = null,
+  compact = false,
+  onFloorClick,
 }: BuildingRenderViewerProps) {
   const router = useRouter();
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(
+    initialActiveFloorId,
+  );
   const [failedForUrl, setFailedForUrl] = useState<string | null>(null);
   const src =
     failedForUrl === imageUrl
       ? "/buildings/building-render.png"
       : imageUrl;
 
+  const openFloor = (floor: BuildingRenderFloor) => {
+    if (onFloorClick) {
+      onFloorClick(floor);
+      return;
+    }
+    router.push(floor.href);
+  };
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+    <div
+      className={
+        compact
+          ? "space-y-3"
+          : "grid gap-6 lg:grid-cols-[1fr_280px]"
+      }
+    >
       <div className="relative overflow-hidden border border-[var(--mp-line)] bg-[#1a1c1f]">
         <div className="relative mx-auto w-full max-w-[560px]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -57,7 +83,8 @@ export function BuildingRenderViewer({
             alt={`${buildingName} render`}
             width={imageWidth}
             height={imageHeight}
-            className="h-auto w-full object-contain"
+            draggable={false}
+            className="pointer-events-none h-auto w-full select-none object-contain"
             onError={() => setFailedForUrl(imageUrl)}
           />
           <svg
@@ -66,52 +93,49 @@ export function BuildingRenderViewer({
             preserveAspectRatio="xMidYMid meet"
           >
             {floors.map((floor) => {
-              if (floor.interactionType === "MARKER" || !floor.svgPath) {
-                return null;
-              }
+              if (!floor.svgPath) return null;
               const isActive = floor.id === activeId;
               return (
                 <path
                   key={`poly-${floor.id}`}
                   d={floor.svgPath}
-                  className="cursor-pointer outline-none focus-visible:stroke-[var(--mp-focus)]"
+                  className="cursor-pointer outline-none transition-[fill,stroke-width] duration-150 focus-visible:stroke-white"
                   fill={
                     isActive
-                      ? "rgba(214, 190, 140, 0.42)"
-                      : "rgba(214, 190, 140, 0.16)"
+                      ? "rgba(224,122,47,0.48)"
+                      : "rgba(224,122,47,0.16)"
                   }
-                  stroke={
-                    isActive
-                      ? "rgba(245, 232, 205, 0.95)"
-                      : "rgba(138, 115, 72, 0.55)"
-                  }
+                  stroke={isActive ? "#c45c26" : "#e07a2f"}
                   strokeWidth={isActive ? 3 : 1.5}
                   tabIndex={0}
                   role="button"
-                  aria-label={floor.name}
+                  aria-label={`${floor.name} · բացել նկարի upload`}
                   onMouseEnter={() => setActiveId(floor.id)}
-                  onMouseLeave={() => setActiveId(null)}
+                  onMouseLeave={() =>
+                    setActiveId(initialActiveFloorId)
+                  }
                   onFocus={() => setActiveId(floor.id)}
-                  onBlur={() => setActiveId(null)}
+                  onBlur={() => setActiveId(initialActiveFloorId)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      router.push(floor.href);
+                      openFloor(floor);
                     }
                   }}
-                  onClick={() => router.push(floor.href)}
+                  onClick={() => openFloor(floor)}
                 />
               );
             })}
           </svg>
           {floors.map((floor) => {
             if (floor.interactionType === "POLYGON") return null;
+            const isActive = floor.id === activeId;
             return (
               <button
                 key={`marker-${floor.id}`}
                 type="button"
-                className={`absolute z-10 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white text-[10px] font-semibold tracking-wide text-white shadow-[0_2px_6px_rgba(0,0,0,0.35)] ${
-                  floor.id === activeId
+                className={`absolute z-10 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white text-[10px] font-semibold tracking-wide text-white shadow-[0_2px_6px_rgba(0,0,0,0.35)] transition ${
+                  isActive
                     ? "bg-[#d56a20] ring-2 ring-white/80"
                     : "bg-[#e07a2f]"
                 }`}
@@ -120,54 +144,60 @@ export function BuildingRenderViewer({
                   top: `${floor.markerY * 100}%`,
                 }}
                 onMouseEnter={() => setActiveId(floor.id)}
-                onMouseLeave={() => setActiveId(null)}
-                onClick={() => router.push(floor.href)}
+                onMouseLeave={() => setActiveId(initialActiveFloorId)}
+                onClick={() => openFloor(floor)}
               >
                 {formatMarkerLabel(floor.label)}
               </button>
             );
           })}
         </div>
+        <p className="border-t border-[var(--mp-line)] bg-[var(--mp-panel)] px-3 py-2 text-xs text-[var(--mp-ink-muted)]">
+          Hover հարկի վրա → նարնջագույն գոտի · Click → նկար upload / հատակագիծ
+        </p>
       </div>
 
-      <aside className="space-y-3">
-        <h3 className="font-[family-name:var(--font-display)] text-xl">
-          Հարկեր
-        </h3>
-        <p className="text-xs text-[var(--mp-ink-muted)]">
-          Սովորական նկար · հարկերի polygon-ները clickable են։
-        </p>
-        <ul className="divide-y divide-[var(--mp-line)] border border-[var(--mp-line)]">
-          {floors.map((floor) => {
-            const isActive = floor.id === activeId;
-            return (
-              <li key={floor.id}>
-                <Link
-                  href={floor.href}
-                  className={`flex items-center justify-between px-3 py-3 text-sm transition ${
-                    isActive
-                      ? "bg-[var(--mp-panel-hover)]"
-                      : "hover:bg-[var(--mp-panel-hover)]"
-                  }`}
-                  onMouseEnter={() => setActiveId(floor.id)}
-                  onMouseLeave={() => setActiveId(null)}
-                >
-                  <span>
-                    <span className="font-medium">{floor.name}</span>
-                    <span className="mt-0.5 block text-xs text-[var(--mp-ink-muted)]">
-                      {floor.availableApartmentCount} հասանելի
-                      {floor.svgPath ? " · mapped" : ""}
+      {compact ? null : (
+        <aside className="space-y-3">
+          <h3 className="font-[family-name:var(--font-display)] text-xl">
+            Հարկեր
+          </h3>
+          <p className="text-xs text-[var(--mp-ink-muted)]">
+            Գոտու վրա hover արա՝ նարնջագույն տեսնելու համար, սեղմիր՝ հատակագիծը
+            բացելու համար։
+          </p>
+          <ul className="divide-y divide-[var(--mp-line)] border border-[var(--mp-line)]">
+            {floors.map((floor) => {
+              const isActive = floor.id === activeId;
+              return (
+                <li key={floor.id}>
+                  <Link
+                    href={floor.href}
+                    className={`flex items-center justify-between px-3 py-3 text-sm transition ${
+                      isActive
+                        ? "bg-[var(--mp-panel-hover)]"
+                        : "hover:bg-[var(--mp-panel-hover)]"
+                    }`}
+                    onMouseEnter={() => setActiveId(floor.id)}
+                    onMouseLeave={() => setActiveId(initialActiveFloorId)}
+                  >
+                    <span>
+                      <span className="font-medium">{floor.name}</span>
+                      <span className="mt-0.5 block text-xs text-[var(--mp-ink-muted)]">
+                        {floor.availableApartmentCount} հասանելի
+                        {floor.svgPath ? " · mapped" : ""}
+                      </span>
                     </span>
-                  </span>
-                  <span className="text-xs uppercase tracking-[0.14em] text-[var(--mp-ink-muted)]">
-                    Բացել
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </aside>
+                    <span className="text-xs uppercase tracking-[0.14em] text-[var(--mp-ink-muted)]">
+                      Բացել
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </aside>
+      )}
     </div>
   );
 }

@@ -95,7 +95,7 @@ export default async function BuildingPage({ params }: BuildingPageProps) {
           2: districtHref,
           3: buildingHref,
         }}
-        guidance="Փուլ 3 · Ընտրիր հարկը 3D-ից, նկարից կամ ներքևի ցանկից՝ հատակագիծը բացելու համար։"
+        guidance="Փուլ 3 · Hover հարկի գոտու վրա → նարնջագույն · Click → հատակագիծ / բնակարաններ։"
       />
 
       {payload3d && hasFloors ? (
@@ -118,7 +118,8 @@ export default async function BuildingPage({ params }: BuildingPageProps) {
           Շենքի նկար
         </h2>
         <p className="mb-4 text-sm text-[var(--mp-ink-muted)]">
-          Ստատիկ render · հարկերի polygon-ները clickable են։
+          Hover հարկի վրա → նարնջագույն գոտի։ Click → բացվում է այդ հարկի
+          հատակագիծը (upload-ած նկարը)։
         </p>
         {renderPayload && renderPayload.floors.length > 0 ? (
           <BuildingRenderViewer
