@@ -110,7 +110,7 @@ export function BuildingRenderViewer({
               <button
                 key={`marker-${floor.id}`}
                 type="button"
-                className={`absolute z-10 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white text-xs font-semibold tracking-wide text-white shadow-[0_3px_10px_rgba(0,0,0,0.35)] ${
+                className={`absolute z-10 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white text-[10px] font-semibold tracking-wide text-white shadow-[0_2px_6px_rgba(0,0,0,0.35)] ${
                   floor.id === activeId
                     ? "bg-[#d56a20] ring-2 ring-white/80"
                     : "bg-[#e07a2f]"
