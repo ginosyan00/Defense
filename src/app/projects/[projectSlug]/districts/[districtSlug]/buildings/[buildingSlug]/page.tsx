@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BuildingRenderViewer } from "@/components/building/BuildingRenderViewer";
+import { Building3DViewerLazy } from "@/components/building-3d/Building3DViewerLazy";
+import { getBuilding3DPayload } from "@/lib/building/get-building-3d";
 import { getBuildingRenderPayload } from "@/lib/building/get-building-render";
 import { prisma } from "@/lib/db";
 
@@ -52,11 +54,12 @@ export default async function BuildingPage({ params }: BuildingPageProps) {
 
   if (!building) notFound();
 
-  const renderPayload = await getBuildingRenderPayload(
-    projectSlug,
-    districtSlug,
-    buildingSlug,
-  );
+  const [payload3d, renderPayload] = await Promise.all([
+    getBuilding3DPayload(projectSlug, districtSlug, buildingSlug),
+    getBuildingRenderPayload(projectSlug, districtSlug, buildingSlug),
+  ]);
+
+  const hasFloors = building.floors.length > 0;
 
   return (
     <main className="min-h-full bg-[var(--mp-canvas)] text-[var(--mp-ink)]">
@@ -86,6 +89,21 @@ export default async function BuildingPage({ params }: BuildingPageProps) {
         </div>
       </header>
 
+      {payload3d && hasFloors ? (
+        <section className="mx-auto max-w-[1600px] px-4 py-8 md:px-8">
+          <h2 className="mb-2 font-[family-name:var(--font-display)] text-2xl">
+            3D շենք
+          </h2>
+          <p className="mb-4 text-sm text-[var(--mp-ink-muted)]">
+            {payload3d.building.model3dUrl
+              ? "GLB model · հարկերն ընտրելի են hover/click-ով։"
+              : "Procedural 3D preview · GLB դեռ չկա, հարկերն ընտրելի են։"}{" "}
+            WebGL չլինելու դեպքում օգտագործեք աջ կողմի ցանկը։
+          </p>
+          <Building3DViewerLazy payload={payload3d} />
+        </section>
+      ) : null}
+
       <section className="mx-auto max-w-[1600px] px-4 py-8 md:px-8">
         <h2 className="mb-4 font-[family-name:var(--font-display)] text-2xl">
           Շենքի նկար
@@ -101,7 +119,7 @@ export default async function BuildingPage({ params }: BuildingPageProps) {
           />
         ) : (
           <p className="text-sm text-[var(--mp-ink-muted)]">
-            Հարկեր չկան։
+            Հարկեր չկան կամ render mapping դեռ չկա։
           </p>
         )}
       </section>
@@ -111,7 +129,7 @@ export default async function BuildingPage({ params }: BuildingPageProps) {
           Հարկերի ցանկ
         </h2>
         <p className="mb-4 text-sm text-[var(--mp-ink-muted)]">
-          Accessibility fallback — հարկերի ցանկը աշխատում է առանց 3D viewer-ի։
+          Accessibility fallback — աշխատում է առանց WebGL և առանց 3D model-ի։
         </p>
         {building.floors.length === 0 ? (
           <p className="text-sm text-[var(--mp-ink-muted)]">

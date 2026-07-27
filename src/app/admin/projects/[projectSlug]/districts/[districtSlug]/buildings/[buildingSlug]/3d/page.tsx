@@ -29,11 +29,12 @@ export default async function AdminBuilding3dPage({ params }: PageProps) {
 
   if (!building) notFound();
 
-  // Until GLB parsing lands in Phase 6, offer conventional mesh names.
+  // Conventional mesh names for procedural preview + admin mapping.
+  // When a GLB is uploaded later, map Floor_XX names to its meshes here.
   const discoveredMeshes = [
     "Ground",
     ...building.floors.map(
-      (floor) => `Floor_${String(floor.floorNumber).padStart(2, "0")}`,
+      (floor) => floor.meshName || `Floor_${String(floor.floorNumber).padStart(2, "0")}`,
     ),
     "Roof",
   ];
@@ -50,6 +51,11 @@ export default async function AdminBuilding3dPage({ params }: PageProps) {
         <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl">
           3D mesh mapping · {building.name}
         </h1>
+        <p className="mt-1 text-sm text-[var(--mp-ink-muted)]">
+          {building.model3dUrl
+            ? `GLB՝ ${building.model3dUrl}`
+            : "GLB դեռ չկա — public page-ը ցույց է տալիս procedural 3D preview՝ այս mesh անուններով։"}
+        </p>
       </div>
 
       <Building3dMapper

@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useTransition, type FormEvent } from "react";
+import { submitConsultation } from "@/lib/apartment/consultation-actions";
+import { RESERVATION_HOLD_HOURS } from "@/lib/apartment/reservation-rules";
 
 type ConsultationFormProps = {
   apartmentSlug: string;
@@ -14,13 +16,59 @@ export function ConsultationForm({
   reservationDisabled,
 }: ConsultationFormProps) {
   const [error, setError] = useState<string | null>(null);
+  const [submittedMode, setSubmittedMode] = useState<
+    "consult" | "reserve" | null
+  >(null);
+  const [holdExpiresAt, setHoldExpiresAt] = useState<string | null>(null);
   const [mode, setMode] = useState<"consult" | "reserve">("consult");
+  const [pending, startTransition] = useTransition();
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    // Persistence (Lead / Reservation) is not wired yet — do not fake success.
-    setError(
-      "Հարցումների համակարգը դեռ միացված չէ։ Խնդրում ենք կապվել վաճառքի բաժնի հետ անմիջապես։",
+    setError(null);
+
+    const form = new FormData(event.currentTarget);
+    const payload = {
+      apartmentSlug,
+      mode,
+      name: String(form.get("name") ?? ""),
+      phone: String(form.get("phone") ?? ""),
+      email: String(form.get("email") ?? ""),
+      message: String(form.get("message") ?? ""),
+    };
+
+    startTransition(async () => {
+      const result = await submitConsultation(payload);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setSubmittedMode(result.mode);
+      setHoldExpiresAt(result.holdExpiresAt);
+    });
+  }
+
+  if (submittedMode) {
+    return (
+      <div className="border border-[var(--mp-line)] bg-[var(--mp-panel)] p-5 text-sm">
+        <p>
+          {submittedMode === "reserve"
+            ? "Ամրագրումը ընդունված է։ Մեր մասնագետը կապ կհաստատի ձեզ հետ։"
+            : "Հարցումը ընդունված է։ Մեր մասնագետը կապ կհաստատի ձեզ հետ։"}
+        </p>
+        {submittedMode === "reserve" && holdExpiresAt ? (
+          <p className="mt-2 text-xs text-[var(--mp-ink-muted)]">
+            Hold՝ {RESERVATION_HOLD_HOURS} ժամ · մինչև{" "}
+            {new Date(holdExpiresAt).toLocaleString("hy-AM", {
+              dateStyle: "medium",
+              timeStyle: "short",
+            })}
+          </p>
+        ) : null}
+        <p className="mt-2 text-xs text-[var(--mp-ink-muted)]">
+          Բնակարան {apartmentNumber}
+        </p>
+      </div>
     );
   }
 
@@ -66,11 +114,15 @@ export function ConsultationForm({
           Այս բնակարանի համար ամրագրումը հասանելի չէ։ Կարող եք խնդրել
           խորհրդատվություն։
         </p>
+      ) : mode === "reserve" ? (
+        <p className="text-xs text-[var(--mp-ink-muted)]">
+          Ամրագրումը ժամանակավոր hold է ({RESERVATION_HOLD_HOURS} ժամ) և
+          արգելում է այլ ամրագրումներ նույն բնակարանի համար։
+        </p>
       ) : null}
 
       <p className="text-sm text-[var(--mp-ink-muted)]">
         Բնակարան {apartmentNumber}
-        <span className="sr-only"> ({apartmentSlug})</span>
       </p>
 
       <label className="block text-sm">
@@ -78,6 +130,7 @@ export function ConsultationForm({
         <input
           required
           name="name"
+          autoComplete="name"
           className="mt-1 w-full border border-[var(--mp-line)] bg-transparent px-3 py-2"
         />
       </label>
@@ -87,6 +140,7 @@ export function ConsultationForm({
           required
           name="phone"
           type="tel"
+          autoComplete="tel"
           className="mt-1 w-full border border-[var(--mp-line)] bg-transparent px-3 py-2"
         />
       </label>
@@ -95,6 +149,7 @@ export function ConsultationForm({
         <input
           name="email"
           type="email"
+          autoComplete="email"
           className="mt-1 w-full border border-[var(--mp-line)] bg-transparent px-3 py-2"
         />
       </label>
@@ -115,9 +170,10 @@ export function ConsultationForm({
 
       <button
         type="submit"
-        className="w-full border border-[var(--mp-ink)] bg-[var(--mp-ink)] px-3 py-3 text-xs uppercase tracking-[0.18em] text-[var(--mp-panel)]"
+        disabled={pending}
+        className="w-full border border-[var(--mp-ink)] bg-[var(--mp-ink)] px-3 py-3 text-xs uppercase tracking-[0.18em] text-[var(--mp-panel)] disabled:cursor-wait disabled:opacity-60"
       >
-        Ուղարկել
+        {pending ? "Ուղարկվում է…" : "Ուղարկել"}
       </button>
     </form>
   );

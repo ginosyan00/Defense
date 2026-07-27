@@ -57,7 +57,10 @@ export function Building3dMapper({
         <p className="text-xs uppercase tracking-[0.14em] text-[var(--mp-ink-muted)]">
           GLB model
         </p>
-        <p className="mt-1">{model3dUrl ?? "Model URL դեռ չկա (Phase 6 loader)"}</p>
+        <p className="mt-1">
+          {model3dUrl ??
+            "Model URL դեռ չկա — public page-ը օգտագործում է procedural 3D preview։"}
+        </p>
         <p className="mt-3 text-xs uppercase tracking-[0.14em] text-[var(--mp-ink-muted)]">
           Discovered mesh names
         </p>

@@ -32,8 +32,8 @@ describe("3D code splitting boundary", () => {
   });
 });
 
-describe("building page uses static image (no WebGL)", () => {
-  it("building page does not import three.js or Building3DViewer", () => {
+describe("building page 3D island", () => {
+  it("mounts lazy 3D viewer without a static three.js import", () => {
     const source = readFileSync(
       path.join(
         process.cwd(),
@@ -41,7 +41,11 @@ describe("building page uses static image (no WebGL)", () => {
       ),
       "utf8",
     );
-    expect(source).not.toMatch(/three|@react-three|Building3DViewer/);
+    expect(source).toContain("Building3DViewerLazy");
     expect(source).toContain("BuildingRenderViewer");
+    expect(source).not.toMatch(/from ["']three["']|from ["']@react-three/);
+    expect(source).not.toMatch(
+      /from ["']@\/components\/building-3d\/Building3DViewer["']/,
+    );
   });
 });
